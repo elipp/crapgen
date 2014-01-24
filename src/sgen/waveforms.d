@@ -17,7 +17,10 @@ float waveform_sine(float freq, float t, float phi) {
 }
 
 float waveform_square(float freq, float t, float phi) {
-	return (TWO_PI*freq*t + phi) > PI ? 1 : -1;
+	float p = (TWO_PI*freq*t + phi)/TWO_PI;
+	float phase = p - floor(p);
+
+	return (phase > 0.5 ? 1 : -1);
 }
 
 float waveform_triangle(float freq, float t, float phi) {
@@ -42,8 +45,24 @@ float[] note_synthesize(float freq, float duration, envelope env, wformfptr wfor
 	float dt = 1.0/samplerate;
 	float t = 0;
 
-	for (long i = 0; i < num_samples; ++i) {
-		samples[i] = std.math.exp(-2*t)*wform(freq, t, 0);
+	long i = 0;
+	long fadein_samples = 2500;
+	long fadeout_samples = 1500;
+
+	static float e(float t) { return std.math.exp(-3*t); }
+
+	for (; i < fadein_samples; ++i) {
+		samples[i] = exp(100*(t - (fadein_samples/samplerate)))*e(t)*wform(freq, t, 0);
+		t += dt;
+	}
+	for (; i < num_samples - fadeout_samples; ++i) {
+		samples[i] = e(t)*wform(freq, t, 0);
+		t += dt;
+	}
+
+	for (; i < num_samples; ++i) {
+		samples[i] = exp(70*((duration-t) - (fadeout_samples/samplerate)))*e(t)*wform(freq,t,0);
+//		samples[i] = e(t)*wform(freq,t,0);
 		t += dt;
 	}
 

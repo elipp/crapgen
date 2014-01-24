@@ -151,7 +151,14 @@ int construct_song_struct(expression[] expressions, out song s) {
 			s.tracks ~= t;
 		}
 		else if (w == "tempo") {
-			s.tempo_bpm = to!float(std.string.chop(expr.words[1]));
+			try {
+				s.tempo_bpm = to!float(std.string.chop(expr.words[1]));
+			}
+			catch (ConvException c) {
+				derr.writefln("tempo: unable to convert string \"" ~ expr.words[1] ~ "\" to a meaningful tempo value. Defaulting to 120 bpm.\n");
+				s.tempo_bpm = 120;	// default tempo
+			}
+			writefln("found tempo directive: " ~ expr.words[1] ~ " bpm.");
 		}
 		else { 
 			derr.writefln("sgen: warning: unknown keyword \"" ~ w ~ "\"!");
@@ -186,12 +193,12 @@ static int render_into_output_format(output o, float[] buffer) {
 }
 
 static int synthesize(ref song s) {
-	float[] buffer = new float[2*10*44100];
+	float[] buffer = new float[10*44100];
 	
 	for (int i = 0; i < buffer.length; ++i) { buffer[i] = 0; }
 
 	foreach(t; s.tracks) {
-		t.npb = 16;
+		t.npb = 8;
 		float note_dur = (1.0/(t.npb*(s.tempo_bpm/60)));
 		writefln("note_dur = " ~ to!string(note_dur) ~ " s.");
 		long buffer_offset = 0;
@@ -209,6 +216,13 @@ static int synthesize(ref song s) {
 
 	output o;
 	render_into_output_format(o, buffer);
+
+	auto file = std.stdio.File("waveform.dat", "w");
+	for (long i = 0; i < buffer.length; ++i) {
+		file.writefln("%d\t%f", i, buffer[i]);
+	}
+
+	file.close();
 
 	return 1;
 }
