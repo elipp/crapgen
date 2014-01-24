@@ -1,0 +1,17 @@
+version 0.01;
+
+tempo 120;
+
+sample sample1("sound.wav");
+
+sound sound1(sound=sample1);
+
+track track1(beatdiv=5, sound=sin, channel=left) = {
+	0, 2, 4, 0, 0, 4, 2, 0, 4, 2, 0, 4, 0, 6, 5, 4
+};
+
+track track2(beatdiv=4, sound=square, channel=right) = {
+	7, 3, 5
+};
+
+song = { track1, track2 };
