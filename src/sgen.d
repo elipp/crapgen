@@ -18,7 +18,7 @@ char[] join_string_list_with_delim(char[][] arg, string delim) {
 		joint = joint ~ delim ~ arg[i];
 	}
 	return joint; 
-	
+
 }
 
 static expression[] decompose_into_clean_expressions(char[][] input) {
@@ -38,22 +38,23 @@ static expression[] decompose_into_clean_expressions(char[][] input) {
 }
 
 string[] keywords = [
-	"song", "track", "sample", "version", "tempo"
+"song", "track", "sample", "version", "tempo"
 ];
 
 struct articulation; //nyi
 struct filter; //nyi
 
 struct note {
-	
+
 };
 
 struct track {
 	char[] name;
 	int sound_index;
 	bool loop;
-	int[] notes;
+	int[][] notes;
 	int active;
+	int transpose;
 	int channel; // 0x1 == left, 0x2 == right, 0x3 == both
 	float npb;
 	this(char[] track_expr);
@@ -86,14 +87,15 @@ static int find_stuff_between(char beg, char end, char[] input, out char[] outpu
 	long block_beg = std.string.indexOf(input, beg);
 	long block_end = std.string.indexOf(input, end);
 
+	if (block_beg == -1 && block_end == -1) { return 0; }
 	if (block_beg == -1 || block_end == -1 || (block_beg > block_end)) {
-		derr.writefln("find_stuff_between: syntax error: {}");
-		return 0;
+		derr.writefln("find_stuff_between: syntax error: " ~ beg ~ end);
+		return -1;
 	}
 
 	output = input[(block_beg+1)..block_end];
 	return 1;
-	
+
 }
 
 static char[][] find_comma_sep_list_contents(char[] input) {
@@ -121,11 +123,12 @@ static int get_trackname(expression track_expr, ref track t) {
 
 int read_track(expression track_expr, ref track t) {
 
-// default vals
+	// default vals
 	t.npb = 4;
 	t.channel = 0;
 	t.loop = false;
 	t.active = 1;
+	t.transpose = 0;
 
 	char[] track_args;
 	if (!find_stuff_between('(', ')', track_expr.statement, track_args)) { return 0; }
@@ -135,15 +138,16 @@ int read_track(expression track_expr, ref track t) {
 	foreach (a; args) {
 		auto s = a.split("=");
 		if (s.length < 2) { derr.writefln("read_track: reading arg list failed; split(\"=\").length < 2!\""); continue; }
+		auto prop = std.string.strip(s[0]);
 		auto val = std.string.strip(s[1]);
 
-		switch(std.string.strip(s[0])) {
+		writefln("track " ~ t.name ~ ": prop " ~ prop ~ " = " ~ val);
+		switch(prop) {
 			case "beatdiv":
-				t.npb = to!float(s[1]);		// add try catch
-				writefln("track " ~ t.name ~ ": found beatdiv arg: %f", t.npb);
+				t.npb = to!float(val);		// add try catch
 				break;
 			case "channel":
-	//			channel = to!int(s[1]);		
+				//			channel = to!int(s[1]);		
 				if (val == "left" || val == "l") {
 					t.channel |= 0x1;
 				}
@@ -155,8 +159,7 @@ int read_track(expression track_expr, ref track t) {
 				}
 				break;
 			case "sound":
-	//			sound = to!int(s[1]);
-				writeln("track " ~ t.name ~ ": found sound arg (nyi)");
+				//			sound = to!int(s[1]);
 				break;
 			case "reverse":
 				// nyi
@@ -167,14 +170,15 @@ int read_track(expression track_expr, ref track t) {
 				// nyi
 			case "loop":
 				if (val == "true") t.loop = true;
-				writefln("track " ~ t.name ~ ": looping enabled");
 				break;
 
 			case "active":
 				if (val == "false" || val == "0") t.active = 0;
-				writefln("track " ~ t.name ~ ": active=false");
 				break;
 
+			case "transpose":
+				t.transpose = to!int(val);
+				break;
 			default:
 				derr.writeln("read_track: warning: unknown track arg \"" ~ s[0] ~ "\", ignoring");
 		}
@@ -185,15 +189,38 @@ int read_track(expression track_expr, ref track t) {
 	if (!find_stuff_between('{', '}', track_expr.statement, track_contents)) {
 		return 0;
 	}
-	
-	try {
-		t.notes = to!(int[])(find_comma_sep_list_contents(track_contents));
+
+	auto notelist = find_comma_sep_list_contents(track_contents);
+
+	foreach (notestr; notelist) {
+		char[] note_conts;
+		int ret = -1;
+
+		try {
+			if ((ret = find_stuff_between('<', '>', notestr, note_conts)) < 0) {
+				// syntax error
+				derr.writefln("read_track: track " ~ t.name ~ ": syntax error in note \"" ~ notestr ~ "\"");
+				return 0;
+			}
+			else if (ret == 0) {
+				int[] tmp = new int[1];
+				tmp[0] = to!int(notestr);
+				t.notes ~= tmp;
+
+			} else {
+				auto nlist = note_conts.split();
+				// foreach (g; nlist) writefln(g);
+				t.notes ~= to!(int[])(nlist);
+			}
+		}
+		catch (ConvException c) {
+			derr.writefln("read_track: track " ~ t.name ~ ": ConvException caught: syntax error: invalid note input \"" ~ note_conts ~ "\"!");
+			return 0;
+		}
+
+
 	}
-	catch (ConvException c) {
-		derr.writefln("read_track: track " ~ t.name ~ ": ConvException caught: syntax error: unable to cast note id to integer.!");
-		return 0;
-	}
-	
+
 	writeln("read_track: " ~ t.name ~ ":");
 	foreach(n; t.notes) write(to!string(n) ~ " ");
 	writeln("");
@@ -203,7 +230,7 @@ int read_track(expression track_expr, ref track t) {
 }
 
 int construct_song_struct(expression[] expressions, out song s) {
-// find song block
+	// find song block
 
 	int song_found = 0;
 
@@ -254,7 +281,7 @@ int construct_song_struct(expression[] expressions, out song s) {
 		}
 		else { 
 			derr.writefln("sgen: warning: unknown keyword \"" ~ w ~ "\"!");
-//			return 0;
+			//			return 0;
 		}
 	}
 
@@ -275,12 +302,16 @@ int construct_song_struct(expression[] expressions, out song s) {
 
 	return 1;
 }
-
-static float pitch_from_index(int index) {
+static float[] pitch_from_indices(int[] indices, float transpose) {
 	static const float twelve_equal_coeff = 1.05946309436; // 2^(1/12)
 	static const float low_c = 32.7032;
-	float pitch = (low_c * std.math.pow(twelve_equal_coeff, index));
-	return pitch;
+	float[] pitches = new float[indices.length];
+
+	for (int i = 0; i < pitches.length; ++i) {
+		pitches[i] = low_c * std.math.pow(twelve_equal_coeff, indices[i] + transpose);
+	}
+
+	return pitches;
 }
 
 static int render_into_output_format(output o, float[] buffer) {
@@ -303,7 +334,7 @@ static int synthesize(ref song s) {
 	const long num_samples = 10*44100;
 	float[] left_channel_buffer = new float[num_samples];
 	float[] right_channel_buffer = new float[num_samples];
-	
+
 	std.c.string.memset(cast(void*)left_channel_buffer, 0, left_channel_buffer.length*float.sizeof);
 	std.c.string.memset(cast(void*)right_channel_buffer, 0, right_channel_buffer.length*float.sizeof);
 
@@ -319,43 +350,43 @@ static int synthesize(ref song s) {
 
 		int note_index = 0;
 		while (l_buffer_offset < left_channel_buffer.length &&
-		       r_buffer_offset < right_channel_buffer.length) {
+			r_buffer_offset < right_channel_buffer.length) {
 
-		       if (note_index >= t.notes.length - 1) {
-		       		if (!t.loop) { break; }
+			if (note_index >= t.notes.length - 1) {
+				if (!t.loop) { break; }
 				else { note_index = 0; }
 			}
-			
-			int n = t.notes[note_index];
 
-			if (n == 0) { // a zero represents a rest
-				l_buffer_offset += num_samples_per_note;
-				r_buffer_offset += num_samples_per_note;
-				continue; 
-			}	 
-			float pitch_hz = pitch_from_index((2*n+10));
+			float[] pitches_hz = pitch_from_indices(t.notes[note_index], t.transpose);
 			envelope e;
-			float[] nbuf = note_synthesize(pitch_hz, note_dur, e, &waveform_triangle);
+			float[] nbuf = note_synthesize(pitches_hz, note_dur, e, &waveform_triangle);
+
+			long n_offset_l = l_buffer_offset;
+			long n_offset_r = r_buffer_offset;
 
 			if (t.channel & 0x1) {
 				long i = 0;
-				while (i < nbuf.length && l_buffer_offset < left_channel_buffer.length) {
-					left_channel_buffer[l_buffer_offset] += nbuf[i];
+				while (i < nbuf.length && n_offset_l < left_channel_buffer.length) {
+					left_channel_buffer[n_offset_l] += nbuf[i];
 					++i;
-					++l_buffer_offset;
+					++n_offset_l;
 				}
 			}
 
 			if (t.channel & 0x2) {
 				long i = 0;
-				while (i < nbuf.length && r_buffer_offset < right_channel_buffer.length) {
-					right_channel_buffer[r_buffer_offset] += nbuf[i];
+				while (i < nbuf.length && n_offset_r < right_channel_buffer.length) {
+					right_channel_buffer[n_offset_r] += nbuf[i];
 					++i;
-					++r_buffer_offset;
+					++n_offset_r;
 				}
 			}
 
+			l_buffer_offset += num_samples_per_note;
+			r_buffer_offset += num_samples_per_note;
+
 			++note_index;
+
 
 		}
 	}
@@ -368,13 +399,22 @@ static int synthesize(ref song s) {
 
 	output o;
 	render_into_output_format(o, merged);
-
-/*	auto file = std.stdio.File("waveform.dat", "w");
-	for (long i = 0; i < buffer.length; ++i) {
-		file.writefln("%d\t%f", i, buffer[i]);
+/*
+	auto leftfile = std.stdio.File("waveform_left.dat", "w+");
+	for (long i = 0; i < left_channel_buffer.length; ++i) {
+		leftfile.writefln("%d\t%f", i, left_channel_buffer[i]);
 	}
 
-	file.close(); */
+	leftfile.close(); 
+
+	auto rightfile = std.stdio.File("waveform_right.dat", "w+");
+	for (long i = 0; i < right_channel_buffer.length; ++i) {
+		rightfile.writefln("%d\t%f", i, right_channel_buffer[i]);
+	}
+
+	rightfile.close(); 
+	*/
+
 
 	return 1;
 }
@@ -413,9 +453,9 @@ int main() {
 			derr.writefln("sgen: fatal: compiler/input file version mismatch! (" ~ sgen_version ~ " != " ~ file_ver ~ ")!"); return 1;
 		}
 	}
-	
+
 	song s;
-	
+
 	if (!construct_song_struct(exprs, s)) return 1;
 
 	synthesize(s);

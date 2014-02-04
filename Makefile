@@ -1,6 +1,6 @@
 SRCDIR := src
 OBJDIR := objs
-DC := dmd -w -g -de -od$(OBJDIR) # llvm d compiler
+DC := dmd -w -g -O -de -od$(OBJDIR) # llvm d compiler
 DFLAGS := -c
 SGENSRCDIR := src/sgen
 INCLUDE := -Isrc
