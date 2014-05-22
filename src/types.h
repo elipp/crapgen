@@ -36,6 +36,7 @@ struct filter_t; //nyi
 typedef struct {
 	int *values;
 	long num_values;
+	int transpose;
 } note_t;
 
 typedef struct {
@@ -43,6 +44,7 @@ typedef struct {
 	int sound_index;
 	int loop;
 	note_t *notes;
+	int num_notes;
 	int active;
 	int transpose;
 	int channel; // 0x1 == left, 0x2 == right, 0x3 == both

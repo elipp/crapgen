@@ -311,10 +311,13 @@ int read_track(expression_t *track_expr, track_t *t) {
 		return 0;
 	}
 
-	dynamic_wlist_t *notelist = tokenize_wr_delim(track_contents, ",");
+	dynamic_wlist_t *notelist_dirty = tokenize_wr_delim(track_contents, ",");
 
+	dynamic_wlist_t *notelist = dynamic_wlist_tidy(notelist_dirty);
+	dynamic_wlist_destroy(notelist_dirty);
 
-	t->notes = malloc(notelist->num_items * sizeof(note_t*));
+	t->notes = malloc(notelist->num_items * sizeof(note_t));
+	t->num_notes = notelist->num_items;
 	long index = 0;
 
 	for (int i = 0; i < notelist->num_items; ++i) {
@@ -334,15 +337,18 @@ int read_track(expression_t *track_expr, track_t *t) {
 			t->notes[index].num_values = 1;
 			
 		} else {
-			dynamic_wlist_t *notes = tokenize_wr_delim(iter, " \t");
+			dynamic_wlist_t *notes = tokenize_wr_delim(note_conts, " \t");
 			t->notes[index].values = malloc(notes->num_items*sizeof(int));
 			for (int i = 0; i < notes->num_items; ++i) {
-				t->notes[index].values[i] = (int)strtol(iter, &end_ptr, 10);
+				t->notes[index].values[i] = (int)strtol(notes->items[i], &end_ptr, 10);
 			}
 			t->notes[index].num_values = notes->num_items;
+			dynamic_wlist_destroy(notes);
 		}
 
-		++iter;
+		t->notes[index].transpose = t->transpose;
+		fprintf(stderr, "note str: \"%s\", num_values = %ld\n", iter, t->notes[index].num_values);
+
 		++index;
 	}
 
@@ -473,7 +479,7 @@ static int sgen_dump(sgen_float32_buffer_t *fb, output_t *output) {
 	FILE *ofp = fopen(outfname, "w"); // "w" = truncate
 	if (!ofp) return 0;
 
-	fwrite(out_buffer, fb->num_samples, sizeof(short), ofp);
+	fwrite(out_buffer, sizeof(short), fb->num_samples, ofp);
 	free(out_buffer);
 
 	fclose(ofp);
@@ -481,8 +487,69 @@ static int sgen_dump(sgen_float32_buffer_t *fb, output_t *output) {
 
 }
 
-static sgen_float32_buffer_t synthesize(output_t *o, song_t *s) {
+static int track_synthesize(track_t *t, float bpm, float *lbuf, float *rbuf) {
+	printf("DEBUG: sgen: synthesizing track \"%s\"\n", t->name);
+	printf("props: loop = %d, active = %d, transpose = %d, channel = %d, npb = %f\n", t->loop, t->active, t->transpose, t->channel, t->npb);
+	if (!t->active) { return 0; }
+
 	const long num_samples = 10*44100;
+
+	float note_dur = (1.0/(t->npb*(bpm/60)));
+
+	long num_samples_per_note = ceil(44100*note_dur);
+	printf("note_dur: %f, num_samples_per_note = %ld\n", note_dur, num_samples_per_note);
+
+	long lbuf_offset = 0;
+	long rbuf_offset = 0;
+
+	int note_index = 0;
+	while (lbuf_offset < num_samples && rbuf_offset < num_samples) {
+		if (note_index >= t->num_notes - 1) {
+			if (!t->loop) { break; }
+			else { note_index = 0; }
+	//			fprintf(stderr, "setting note_index = 0\n");
+		}
+
+		note_t *n = &t->notes[note_index];
+		envelope_t e;
+		float *nbuf = note_synthesize(n, note_dur, e, &waveform_triangle); 
+		// TODO: replace the gratuitous malloc in note_synthesize with a shared buffer, since the size is always the same
+
+		long n_offset_l = lbuf_offset;
+		long n_offset_r = rbuf_offset;
+
+		if (t->channel & 0x1) {
+			long i = 0;
+			while (i < num_samples_per_note && n_offset_l < num_samples) {
+				lbuf[n_offset_l] += nbuf[i];
+				++i;
+				++n_offset_l;
+			}
+		}
+
+		if (t->channel & 0x2) {
+			long i = 0;
+			while (i < num_samples_per_note && n_offset_r < num_samples) {
+				rbuf[n_offset_r] += nbuf[i];
+				++i;
+				++n_offset_r;
+			}
+		}
+
+		lbuf_offset += num_samples_per_note;
+		rbuf_offset += num_samples_per_note;
+
+		free(nbuf);
+
+		++note_index;
+	}
+	return 1;
+}
+
+static sgen_float32_buffer_t song_synthesize(output_t *o, song_t *s) {
+
+	const long num_samples = 10*44100; // TODO: get real length from song_t
+
 	float *lbuf = malloc(num_samples*sizeof(float));
 	float *rbuf = malloc(num_samples*sizeof(float));
 
@@ -491,62 +558,15 @@ static sgen_float32_buffer_t synthesize(output_t *o, song_t *s) {
 
 	for (int i = 0; i < s->num_tracks; ++i) {
 		track_t *t = &s->tracks[i];
-
-		printf("DEBUG: sgen: synthesizing track \"%s\"\n", t->name);
-		printf("props: loop = %d, active = %d, transpose = %d, channel = %d, npb = %f\n", t->loop, t->active, t->transpose, t->channel, t->npb);
-		if (!t->active) { continue; }
-
-		float note_dur = (1.0/(t->npb*(s->tempo_bpm/60)));
-
-		long num_samples_per_note = ceil(44100*note_dur);
-		printf("note_dur: %f, num_samples_per_note = %ld\n", note_dur, num_samples_per_note);
-
-		long lbuf_offset = 0;
-		long rbuf_offset = 0;
-
-		int note_index = 0;
-		while (lbuf_offset < num_samples && rbuf_offset < num_samples) {
-			if (note_index >= t->notes->num_values - 1) {
-				if (!t->loop) { break; }
-				else { note_index = 0; }
-			}
-
-			note_t *n = &t->notes[note_index];
-			envelope_t e;
-			float *nbuf = note_synthesize(n, note_dur, e, &waveform_triangle);
-
-			long n_offset_l = lbuf_offset;
-			long n_offset_r = rbuf_offset;
-
-			if (t->channel & 0x1) {
-				long i = 0;
-				while (i < n->num_values && n_offset_l < num_samples) {
-					lbuf[n_offset_l] += nbuf[i];
-					++i;
-					++n_offset_l;
-				}
-			}
-
-			if (t->channel & 0x2) {
-				long i = 0;
-				while (i < n->num_values && n_offset_r < num_samples) {
-					rbuf[n_offset_r] += nbuf[i];
-					++i;
-					++n_offset_r;
-				}
-			}
-
-			lbuf_offset += num_samples_per_note;
-			rbuf_offset += num_samples_per_note;
-
-			++note_index;
-		}
+		track_synthesize(t, s->tempo_bpm, lbuf, rbuf);
 	}
 
 	float *merged = malloc(2*num_samples*sizeof(float));
 	for (long i = 0; i < num_samples; ++i) {
 		merged[2*i] = lbuf[i];
 		merged[2*i+1] = rbuf[i];
+
+	//	fprintf(stderr, "%f, %f\n", merged[2*i], merged[2*i + 1]);
 	}
 
 	free(lbuf); 
@@ -591,10 +611,11 @@ int file_get_active_expressions(const char* filename, input_t *input) {
 	dynamic_wlist_t *exprs_wlist = dynamic_wlist_tidy(exprs_dirty);
 	dynamic_wlist_destroy(exprs_dirty);
 
+/*
 	char *exprbuf = NULL;
-//	char *saveptr = NULL;
+	char *saveptr = NULL;
 
-/*	for (exprbuf = strtok(raw_buf, ";"); exprbuf != NULL; exprbuf = strtok(NULL, ";")) {
+	for (exprbuf = strtok(raw_buf, ";"); exprbuf != NULL; exprbuf = strtok(NULL, ";")) {
 		char *tidy = tidy_string(exprbuf);
 		if (tidy && tidy[0] != '#') { 
 			dynamic_wlist_append(exprs_wlist, tidy);		
@@ -662,7 +683,7 @@ int main() {
 	output_t output;
 	if (!construct_song_struct(&input, &s)) return 1;
 
-	sgen_float32_buffer_t b = synthesize(&output, &s);
+	sgen_float32_buffer_t b = song_synthesize(&output, &s);
 
 	sgen_dump(&b, &output);
 

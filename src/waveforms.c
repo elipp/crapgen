@@ -1,6 +1,8 @@
 #include <math.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdio.h>
+#include <assert.h>
 
 #ifndef M_PI
 #define M_PI 3.14159265359
@@ -57,9 +59,10 @@ static float *freq_from_noteindex(note_t* note, float transpose) {
 	static const float twelve_equal_coeff = 1.05946309436; // 2^(1/12)
 	static const float low_c = 32.7032;
 	float *pitches = malloc(note->num_values*sizeof(float));
-
+//	fprintf(stderr, "note->num_values: %d, note->values[0] = %d\n", note->num_values, note->values[0]);
 	for (int i = 0; i < note->num_values; ++i) {
 		pitches[i] = low_c * pow(twelve_equal_coeff, note->values[i] + transpose);
+//		fprintf(stderr, "pitch: %f\n", pitches[i]);
 	}
 
 	return pitches;
@@ -70,16 +73,18 @@ float *note_synthesize(note_t *note, float duration, envelope_t env, PFNWAVEFORM
 // TODO: replace hard-coded values with output_t struct values!
 	float samplerate = 44100;
 	long num_samples = (long)ceil(duration*samplerate);
-	float *samples = malloc(num_samples*sizeof(float)); 
 
+	float *samples = malloc(num_samples*sizeof(float)); 
 	memset(samples, 0x0, num_samples*sizeof(float));
 
 	float dt = 1.0/samplerate;
 	float A = 1.0/note->num_values;
 
-	float *freqs = freq_from_noteindex(note, 0);
+	float *freqs = freq_from_noteindex(note, note->transpose);
+
 	for (int i = 0; i < note->num_values; ++i) {
 		float f = freqs[i];
+//		fprintf(stderr, "freq: %f, i = %d\n", f, i);
 		long j = 0;
 		float t = 0;
 		for (; j < num_samples; ++j) {

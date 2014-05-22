@@ -1,7 +1,7 @@
 SRCDIR := src
 OBJDIR := objs
-CC := gcc -Wall -std=c11
-CFLAGS := -c -g
+CC := gcc -Wall -std=c11 -g
+CFLAGS := -c 
 INCLUDE := -Isrc
 LIBS := -lm
 
