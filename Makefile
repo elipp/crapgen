@@ -5,7 +5,7 @@ CFLAGS := -c
 INCLUDE := -Isrc
 LIBS := -lm
 
-SOURCES=$(SRCDIR)/waveforms.c $(SRCDIR)/string_allocator.c
+SOURCES=$(addprefix $(SRCDIR)/, waveforms.c string_allocator.c string_manip.c dynamic_wlist.c)
 
 OBJECTS=$(patsubst $(SRCDIR)/%.c, $(OBJDIR)/%.o, $(SOURCES))
 

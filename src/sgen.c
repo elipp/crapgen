@@ -7,165 +7,11 @@
 #include "waveforms.h"
 #include "types.h"
 #include "string_allocator.h"
-
-static char *strip(const char*);
-static char *tidy_string(const char*);
-static char *substring(const char* str, int beg_pos, int nc);
-char *join_wlist_with_delim(dynamic_wlist_t *wl, const char *delim);
-static dynamic_wlist_t *tokenize_wr_delim(const char* input, const char* delim);
-void dynamic_wlist_print(dynamic_wlist_t *wl);
-dynamic_wlist_t *dynamic_wlist_tidy(dynamic_wlist_t *wl);
-int dynamic_wlist_append(dynamic_wlist_t* wlist, const char* word);
-
-static char *substring(const char* str, int beg_pos, int nc) {
-
-	if (!str) { return NULL; }
-	size_t str_len = strlen(str);
-	if (!str_len) { return NULL; }
-
-	if (str_len < beg_pos + nc) {
-		nc = str_len - beg_pos;
-	}
-
-	char *sub = sa_alloc(nc+1);
-
-	strncpy(sub, str+beg_pos, nc);
-
-	sub[nc] = '\0';
-
-	return sub;
-}
-
-
-static char *strip(const char* input) {
-
-	if (!input) { return NULL; }
-	size_t str_len = strlen(input);
-
-	if (str_len <= 0) { return NULL; }
-
-	int beg = 0;
-	while (beg < str_len) {
-		if (input[beg] == ' ' || input[beg] == '\t' || input[beg] == '\n') ++beg;
-		else break;
-	}
-
-	int end = str_len-1;
-	while (end > 0) {
-		if (input[end] == ' ' || input[end] == '\t' || input[end] == '\n') --end;
-		else break;
-	}
-	
-	long len = end - beg + 1;
-	if (len < 1) {
-		fprintf(stderr, "sgen: strip: input string len < 1!\n");
-
-		return NULL;
-	}
-
-	char *r = substring(input, beg, len);
-	return r;
-}
-
-static char *tidy_string(const char* input) {
-	
-	char *tidy = strip(input);
-	if (!tidy) { return NULL; }
-
-	char *chrpos = strchr(tidy, '\n');
-	while (chrpos != NULL) {
-		*chrpos = ' ';
-		chrpos = strchr(chrpos+1, '\n');
-	}
-
-	dynamic_wlist_t *t = tokenize_wr_delim(tidy, " \t");
-	char *r = join_wlist_with_delim(t, " ");	// this should get rid of all duplicate whitespace (two or more consecutive)
-
-	sa_free(tidy);
-	return r;
-
-}
-
-
-char *join_wlist_with_delim(dynamic_wlist_t *wl, const char *delim) {
-	size_t total_length = 0;
-
-	for (long i = 0; i < wl->num_items; ++i) {
-		char *iter = wl->items[i];
-		total_length += strlen(iter);
-	}
-
-	size_t joint_size = total_length + wl->num_items + 2;
-	char* joint = sa_alloc(joint_size);
-	memset(joint, 0x0, joint_size);
-
-	for (int i = 0; i < wl->num_items-1; ++i) {
-		char *iter = wl->items[i];
-		strcat(joint, iter);
-		strcat(joint, delim);
-	}
-	strcat(joint, wl->items[wl->num_items-1]);
-	joint[joint_size - 1] = '\0';
-
-//	dynamic_wlist_print(wl);
-//	fprintf(stderr, "joint: \"%s\"\n", joint);
-
-	return joint; 
-
-}
+#include "string_manip.h"
+#include "dynamic_wlist.h"
 
 static const char* keywords[] = 
 { "song", "track", "sample", "version", "tempo" };
-
-dynamic_wlist_t *dynamic_wlist_create() {
-	dynamic_wlist_t *wl = malloc(sizeof(dynamic_wlist_t));
-	wl->num_items = 0;
-	wl->capacity = 8;
-	wl->items = malloc(wl->capacity*sizeof(char*)); 
-	memset(wl->items, 0x0, wl->capacity*sizeof(char*));
-
-	return wl;
-}
-
-void dynamic_wlist_destroy(dynamic_wlist_t *wl) {
-	for (int i = 0; i < wl->num_items; ++i) {
-		sa_free(wl->items[i]);
-	}
-	free(wl->items);
-	free(wl);
-}
-
-dynamic_wlist_t *dynamic_wlist_tidy(dynamic_wlist_t *wl) {
-	dynamic_wlist_t *t = dynamic_wlist_create();
-	for (int i = 0; i < wl->num_items; ++i) {
-		dynamic_wlist_append(t, tidy_string(wl->items[i]));
-	}
-	return t;
-}
-
-void dynamic_wlist_print(dynamic_wlist_t *wl) {
-	printf("wlist contents:\n");
-	for (int i = 0; i < wl->num_items; ++i) {
-		printf(" \"%s\"\n", wl->items[i]);
-	}
-	printf("------------------------\n");
-}
-
-int dynamic_wlist_append(dynamic_wlist_t* wlist, const char* word) {
-
-	if (!word) return 0; 
-
-	++wlist->num_items;
-	if (wlist->num_items > wlist->capacity) {
-		wlist->capacity *= 2;
-		wlist->items = realloc(wlist->items, wlist->capacity*sizeof(char*));
-		if (!wlist->items) { return 0; }
-	}
-
-	wlist->items[wlist->num_items-1] = sa_strdup(word);
-
-	return 1;
-}
 
 static int find_stuff_between(char beg, char end, char* input, char** output) {
 
@@ -190,20 +36,6 @@ static int find_stuff_between(char beg, char end, char* input, char** output) {
 
 }
 
-static dynamic_wlist_t *tokenize_wr_delim(const char* input, const char* delim) {
-	dynamic_wlist_t *wl = dynamic_wlist_create();
-	char *exprbuf; //, *saveptr;
-
-	char *buf = sa_strdup(input);
-
-	for (exprbuf = strtok(buf, delim); exprbuf != NULL; exprbuf = strtok(NULL, delim)) {
-		dynamic_wlist_append(wl, exprbuf);
-	}
-
-	sa_free(buf);
-
-	return wl;
-}
 
 static int get_trackname(expression_t *track_expr, track_t *t) {
 	char* index = NULL;
@@ -249,7 +81,7 @@ int read_track(expression_t *track_expr, track_t *t) {
 			continue; 
 		}
 
-		printf("track \"%s\": prop \"%s\" = \"%s\"\n", t->name, prop, val);
+		printf("track %s: prop \"%s\" = \"%s\"\n", t->name, prop, val);
 		
 		char *endptr;
 		if (strcmp(prop, "beatdiv") == 0) {
@@ -328,7 +160,7 @@ int read_track(expression_t *track_expr, track_t *t) {
 
 		if ((ret = find_stuff_between('<', '>', iter, &note_conts)) < 0) {
 			// syntax error
-			fprintf(stderr, "read_track: track \"%s\": syntax error in note \"%s\"!", t->name, note_conts);
+			fprintf(stderr, "read_track: track %s: syntax error in note \"%s\"!", t->name, note_conts);
 			return 0;
 		}
 		else if (ret == 0) {
@@ -347,7 +179,7 @@ int read_track(expression_t *track_expr, track_t *t) {
 		}
 
 		t->notes[index].transpose = t->transpose;
-		fprintf(stderr, "note str: \"%s\", num_values = %ld\n", iter, t->notes[index].num_values);
+//		fprintf(stderr, "note str: \"%s\", num_values = %ld\n", iter, t->notes[index].num_values);
 
 		++index;
 	}
@@ -488,7 +320,7 @@ static int sgen_dump(sgen_float32_buffer_t *fb, output_t *output) {
 }
 
 static int track_synthesize(track_t *t, float bpm, float *lbuf, float *rbuf) {
-	printf("DEBUG: sgen: synthesizing track \"%s\"\n", t->name);
+	printf("DEBUG: sgen: synthesizing track %s\n", t->name);
 	printf("props: loop = %d, active = %d, transpose = %d, channel = %d, npb = %f\n", t->loop, t->active, t->transpose, t->channel, t->npb);
 	if (!t->active) { return 0; }
 

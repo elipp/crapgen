@@ -1,6 +1,6 @@
 version 0.01;
 
-tempo 200;
+tempo 10;
 
 sample sample1("sound.wav");
 
