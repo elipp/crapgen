@@ -202,9 +202,8 @@ int construct_song_struct(input_t *input, song_t *s) {
 			song_found = 1;
 			char* tracks;
 			if (!find_stuff_between('{', '}', e->statement, &tracks)) return 0;
-			dynamic_wlist_t *t = tokenize_wr_delim(tracks, ",");
-			s->active_track_ids = dynamic_wlist_tidy(t); 
-			dynamic_wlist_destroy(t);
+			s->active_track_ids = tokenize_wr_delim_tidy(tracks, ",");
+
 			printf("found song block with tracks: ");
 			dynamic_wlist_print(s->active_track_ids);
 		}
@@ -434,31 +433,14 @@ int file_get_active_expressions(const char* filename, input_t *input) {
 	input->filesize = get_filesize(fp);
 
 	char *raw_buf = malloc(input->filesize);	// allocate this dynamically, don't use sa string pool
-	fread(raw_buf, input->filesize, 1, fp);
+	fread(raw_buf, 1, input->filesize, fp);
 
 	fclose(fp);
 
-	//dynamic_wlist_t *exprs_wlist = dynamic_wlist_create();
-	dynamic_wlist_t *exprs_dirty = tokenize_wr_delim(raw_buf, ";");
-	dynamic_wlist_t *exprs_wlist = dynamic_wlist_tidy(exprs_dirty);
-	dynamic_wlist_destroy(exprs_dirty);
-
-/*
-	char *exprbuf = NULL;
-	char *saveptr = NULL;
-
-	for (exprbuf = strtok(raw_buf, ";"); exprbuf != NULL; exprbuf = strtok(NULL, ";")) {
-		char *tidy = tidy_string(exprbuf);
-		if (tidy && tidy[0] != '#') { 
-			dynamic_wlist_append(exprs_wlist, tidy);		
-		} else {
-			if (!tidy) fprintf(stderr, "tidy = NULL!\n");
-		}
-		sa_free(tidy);
-	}
-	*/
-
-
+//	dynamic_wlist_t *exprs_dirty = tokenize_wr_delim(raw_buf, ";");
+//	dynamic_wlist_t *exprs_wlist = dynamic_wlist_tidy(exprs_dirty);
+	dynamic_wlist_t *exprs_wlist = tokenize_wr_delim_tidy(raw_buf, ";");
+	//dynamic_wlist_destroy(exprs_dirty);
 
 	dynamic_wlist_print(exprs_wlist);
 

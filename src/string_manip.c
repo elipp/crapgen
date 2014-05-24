@@ -6,7 +6,7 @@ char *substring(const char* str, int beg_pos, int nc) {
 
 	if (!str) { return NULL; }
 	size_t str_len = strlen(str);
-	if (!str_len) { return NULL; }
+	if (str_len < 1) { return NULL; }
 
 	if (str_len < beg_pos + nc) {
 		nc = str_len - beg_pos;
@@ -27,7 +27,7 @@ char *strip(const char* input) {
 	if (!input) { return NULL; }
 	size_t str_len = strlen(input);
 
-	if (str_len <= 0) { return NULL; }
+	if (str_len < 1) { return NULL; }
 
 	int beg = 0;
 	while (beg < str_len) {
@@ -44,7 +44,6 @@ char *strip(const char* input) {
 	long len = end - beg + 1;
 	if (len < 1) {
 		fprintf(stderr, "sgen: strip: input string len < 1!\n");
-
 		return NULL;
 	}
 
@@ -54,8 +53,9 @@ char *strip(const char* input) {
 
 char *tidy_string(const char* input) {
 	
+	if (!input) return NULL;
 	char *tidy = strip(input);
-	if (!tidy) { return NULL; }
+	if (!tidy) return NULL; 
 
 	char *chrpos = strchr(tidy, '\n');
 	while (chrpos != NULL) {
@@ -64,8 +64,12 @@ char *tidy_string(const char* input) {
 	}
 
 	dynamic_wlist_t *t = tokenize_wr_delim(tidy, " \t");
+//	fprintf(stderr, "tidy_string: tokenize_wr_delim \" \\t\": num_items = %d\n", t->num_items);
 	char *r = dynamic_wlist_join_with_delim(t, " ");	
 	// this should get rid of all duplicate whitespace (two or more consecutive)
+//	fprintf(stderr, "tidy: \"%s\" -> \"%s\"\n", input, r);
+
+	dynamic_wlist_destroy(t);
 
 	sa_free(tidy);
 	return r;
