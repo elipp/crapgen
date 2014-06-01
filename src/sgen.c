@@ -323,7 +323,7 @@ static int track_synthesize(track_t *t, float bpm, float *lbuf, float *rbuf) {
 	printf("props: loop = %d, active = %d, transpose = %d, channel = %d, npb = %f\n", t->loop, t->active, t->transpose, t->channel, t->npb);
 	if (!t->active) { return 0; }
 
-	const long num_samples = 10*44100;
+	const long num_samples = 2*10*44100;
 
 	float note_dur = (1.0/(t->npb*(bpm/60)));
 
@@ -379,7 +379,7 @@ static int track_synthesize(track_t *t, float bpm, float *lbuf, float *rbuf) {
 
 static sgen_float32_buffer_t song_synthesize(output_t *o, song_t *s) {
 
-	const long num_samples = 10*44100; // TODO: get real length from song_t
+	const long num_samples = 2*10*44100; // TODO: get real length from song_t
 
 	float *lbuf = malloc(num_samples*sizeof(float));
 	float *rbuf = malloc(num_samples*sizeof(float));
@@ -470,12 +470,17 @@ input_t input_construct(const char* filename) {
 	return input;
 }
 
-int main() {
+int main(int argc, char* argv[]) {
 
 	static const char* sgen_version = "0.01";
 
-	const char* test_filename = "input_test.sg";
-	input_t input = input_construct(test_filename);
+	if (argc < 2) {
+		fprintf(stderr, "sgen: No input files. Exiting.\n");
+		return 0;
+	}
+
+	char *input_filename = argv[1];
+	input_t input = input_construct(input_filename);
 	
 	if (input.error != 0) { 
 		fprintf(stderr, "sgen: fatal: erroneous input! exiting.\n");
