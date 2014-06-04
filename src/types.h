@@ -48,6 +48,8 @@ typedef struct {
 	int active;
 	int transpose;
 	int channel; // 0x1 == left, 0x2 == right, 0x3 == both
+	int inverse;
+	int reverse;
 	float npb;
 //	this(char[] track_expr);
 } track_t;
@@ -55,7 +57,9 @@ typedef struct {
 typedef struct {
 	track_t* tracks;
 	int num_tracks;
+	int tracks_constructed;
 	dynamic_wlist_t *active_track_ids;
+	float duration;
 	float tempo_bpm;
 //	this(char[] song_expr);
 } song_t;

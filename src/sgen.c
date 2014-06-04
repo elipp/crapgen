@@ -10,8 +10,106 @@
 #include "string_manip.h"
 #include "dynamic_wlist.h"
 
-static const char* keywords[] = 
-{ "song", "track", "sample", "version", "tempo" };
+static int read_track(expression_t *track_expr, track_t *t);
+static int get_trackname(expression_t *track_expr, track_t *t);
+
+int convert_string_to_double(const char* str, double *out) {
+
+	char *endptr;
+	*out = strtod(str, &endptr);		
+
+	if (endptr && *endptr != '\0') {
+		fprintf(stderr, "strtod warning: full double conversion of string \"%s\" couldn't be performed\n", str);
+		return 0;
+	}
+	
+	return 1;
+}
+	
+typedef int (*keywordfunc)(expression_t*, song_t*);
+
+int song_action(expression_t *arg, song_t *s) { return 1; } //dummy
+
+int track_action(expression_t *arg, song_t *s) { 
+
+	track_t t;
+	if (!get_trackname(arg, &t)) { return 0; }
+	int active = 0;
+	for (int i = 0; i < s->active_track_ids->num_items; ++i) {
+		if (strcmp(s->active_track_ids->items[i], t.name) == 0) {
+			active = 1;
+		}
+	}
+	if (!active) {
+		printf("sgen: warning: track \"%s\" defined but not used in a song block!\n", t.name);
+		return 0;
+	}
+
+	if (!read_track(arg, &t)) { fprintf(stderr, "read_track failure. syntax error(?)"); return 0; }
+
+	s->tracks[s->tracks_constructed] = t;
+	++s->tracks_constructed;
+
+	return 1;
+}
+
+int sample_action(expression_t *arg, song_t *s) { printf("sgen: sample: NYI! :/\n"); return 1; }
+int version_action(expression_t *arg, song_t *s) { return 1; }
+int tempo_action(expression_t *arg, song_t *s) { 
+	if (arg->wlist->num_items < 2) {
+		fprintf(stderr, "sgen: error while parsing tempo directive. Defaulting to 120.\n");
+		return 0;
+	}
+
+	char *endptr = NULL;
+	char *val = arg->wlist->items[1];
+	s->tempo_bpm = strtol(val, &endptr, 10);
+	fprintf(stderr, "found tempo directive: \"%s\" bpm.\n", val);
+
+	return 1; 
+}
+
+int duration_action(expression_t *arg, song_t *s) { 
+	if (arg->wlist->num_items < 2) {
+		fprintf(stderr, "sgen: error while parsing duration directive. Defaulting to 10 seconds.\n");
+		return 0;
+	}
+	char *endptr = NULL;
+	char *val = arg->wlist->items[1];
+	s->duration = strtod(val, &endptr);
+	return 1; 
+	
+}
+int samplerate_action(expression_t *arg, song_t *s) { return 1; }
+
+static const struct { 
+	const char* keyword; 
+	keywordfunc action; 
+} keyword_action_pairs[] = { 
+
+{ "song", song_action}, 
+{ "track", track_action }, 
+{ "sample", sample_action },
+{ "version", version_action },
+{ "tempo", tempo_action },
+{ "duration", duration_action },
+{ "samplerate", samplerate_action }};
+
+static int get_trackname(expression_t *track_expr, track_t *t) {
+	char* index = NULL;
+
+	char *w = track_expr->wlist->items[1];
+	if ((index = strchr(w, '(')) != NULL) {
+		t->name = tidy_string(substring(w, 0, index - w));
+		return 1;
+	}
+	else {
+		fprintf(stderr, "read_track: syntax error: must use argument list (\"()\", even if empty) before track contents (\"{}\").");
+		return 0;
+	}
+
+
+}
 
 static int find_stuff_between(char beg, char end, char* input, char** output) {
 
@@ -37,26 +135,10 @@ static int find_stuff_between(char beg, char end, char* input, char** output) {
 }
 
 
-static int get_trackname(expression_t *track_expr, track_t *t) {
-	char* index = NULL;
-
-	char *w = track_expr->wlist->items[1];
-	if ((index = strchr(w, '(')) != NULL) {
-		t->name = tidy_string(substring(w, 0, index - w));
-		return 1;
-	}
-	else {
-		fprintf(stderr, "read_track: syntax error: must use argument list (\"()\", even if empty) before track contents (\"{}\").");
-		return 0;
-	}
-
-
-}
-
-int read_track(expression_t *track_expr, track_t *t) {
+static int read_track(expression_t *track_expr, track_t *t) {
 
 	// default vals
-	t->npb = 4;
+	t->npb = 1;
 	t->channel = 0;
 	t->loop = 0;
 	t->active = 1;
@@ -85,10 +167,9 @@ int read_track(expression_t *track_expr, track_t *t) {
 		
 		char *endptr;
 		if (strcmp(prop, "beatdiv") == 0) {
-			t->npb = strtod(val, &endptr);		
-			if (endptr && *endptr != '\0') {
-				fprintf(stderr, "strtod warning: full double conversion of string \"%s\" couldn't be performed\n", val);
-			}
+			double v = 4;
+			convert_string_to_double(val, &v);
+			t->npb = v;
 		}
 		else if (strcmp(prop, "channel") == 0) {
 			// channel = to!int(s[1]);		
@@ -125,6 +206,7 @@ int read_track(expression_t *track_expr, track_t *t) {
 
 		else if (strcmp(prop, "transpose") == 0)  {
 			t->transpose = strtod(val, &endptr);
+			// check errno
 		}
 		else {
 			fprintf(stderr, "read_track: warning: unknown track arg \"%s\", ignoring", prop);
@@ -213,54 +295,31 @@ int construct_song_struct(input_t *input, song_t *s) {
 		return 0; 
 	}
 
+	// defaults
 	s->tempo_bpm = 120;
+	s->tracks_constructed = 0;
+	s->duration = 10; // seconds
 
-	char *strtol_endptr = NULL;
 
 	s->tracks = malloc(s->active_track_ids->num_items * sizeof(track_t));
 	s->num_tracks = s->active_track_ids->num_items;
 
-	long tracknum = 0;
 	for (int i = 0; i < input->num_active_exprs; ++i) {
 		expression_t *expriter = &input->exprs[i];
 
 		char *w = expriter->wlist->items[0];
 		if (w[0] == '#') continue; // ignore comments
 
-		if (strcmp(w, "track") == 0) {
-			track_t t;
-			if (!get_trackname(expriter, &t)) { return 0; }
-			int active = 0;
-			for (int i = 0; i < s->active_track_ids->num_items; ++i) {
-				if (strcmp(s->active_track_ids->items[i], t.name) == 0) {
-					active = 1;
-				}
+		int unknown = 1;
+		for (int i = 0; i < sizeof(keyword_action_pairs)/sizeof(keyword_action_pairs[0]); ++i) {
+			if (strcmp(w, keyword_action_pairs[i].keyword) == 0){
+				keyword_action_pairs[i].action(expriter, s);
+				unknown = 0;
+				break;
 			}
-			if (!active) {
-				printf("sgen: warning: track \"%s\" defined but not used in a song block!\n", t.name);
-				continue;
-			}
-
-			if (!read_track(expriter, &t)) { fprintf(stderr, "read_track failure. syntax error(?)"); }
-			
-			s->tracks[tracknum] = t;
-			++tracknum;
 		}
-		else if (strcmp(w, "tempo") == 0) {
-			if (expriter->wlist->num_items < 2) {
-				fprintf(stderr, "sgen: error while parsing tempo directive. Defaulting to 120.\n");
-
-			}
-			char *val = expriter->wlist->items[1];
-			s->tempo_bpm = strtol(val, &strtol_endptr, 10);
-			fprintf(stderr, "found tempo directive: \"%s\" bpm.\n", val);
-		}
-		else if (strcmp(w, "song") == 0) {
-			// do nuthin, has already been done
-		}
-		else { 
+		if (unknown) {
 			printf("sgen: warning: unknown keyword \"%s\"!\n", w);
-			//			return 0;
 		}
 
 	}
@@ -437,16 +496,13 @@ int file_get_active_expressions(const char* filename, input_t *input) {
 
 	fclose(fp);
 
-//	dynamic_wlist_t *exprs_dirty = tokenize_wr_delim(raw_buf, ";");
-//	dynamic_wlist_t *exprs_wlist = dynamic_wlist_tidy(exprs_dirty);
 	dynamic_wlist_t *exprs_wlist = tokenize_wr_delim_tidy(raw_buf, ";");
-	//dynamic_wlist_destroy(exprs_dirty);
-
-	dynamic_wlist_print(exprs_wlist);
+	//dynamic_wlist_print(exprs_wlist);
 
 	free(raw_buf);
 
 	long num_exprs = exprs_wlist->num_items;
+
 	expression_t *exprs = malloc(num_exprs*sizeof(expression_t));
 	for (int i = 0; i < exprs_wlist->num_items; ++i) {
 		exprs[i].statement = exprs_wlist->items[i];
