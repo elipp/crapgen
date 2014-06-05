@@ -10,7 +10,7 @@
 #include "string_manip.h"
 #include "dynamic_wlist.h"
 
-static int read_track(expression_t *track_expr, track_t *t);
+static int read_track(expression_t *track_expr, track_t *t, song_t *s);
 static int get_trackname(expression_t *track_expr, track_t *t);
 
 int convert_string_to_double(const char* str, double *out) {
@@ -45,7 +45,7 @@ int track_action(expression_t *arg, song_t *s) {
 		return 0;
 	}
 
-	if (!read_track(arg, &t)) { fprintf(stderr, "read_track failure. syntax error(?)"); return 0; }
+	if (!read_track(arg, &t, s)) { fprintf(stderr, "read_track failure. syntax error(?)\n"); return 0; }
 
 	s->tracks[s->tracks_constructed] = t;
 	++s->tracks_constructed;
@@ -64,7 +64,7 @@ int tempo_action(expression_t *arg, song_t *s) {
 	char *endptr = NULL;
 	char *val = arg->wlist->items[1];
 	s->tempo_bpm = strtol(val, &endptr, 10);
-	fprintf(stderr, "found tempo directive: \"%s\" bpm.\n", val);
+	printf("sgen: found tempo directive: \"%s\" bpm.\n", val);
 
 	return 1; 
 }
@@ -76,7 +76,8 @@ int duration_action(expression_t *arg, song_t *s) {
 	}
 	char *endptr = NULL;
 	char *val = arg->wlist->items[1];
-	s->duration = strtod(val, &endptr);
+	s->duration_s = strtod(val, &endptr);
+	printf("sgen: found duration directive: \"%s\" s.\n", val);
 	return 1; 
 	
 }
@@ -95,6 +96,41 @@ static const struct {
 { "duration", duration_action },
 { "samplerate", samplerate_action }};
 
+static inline int eswap_s32(int n) {
+	return ((n>>24)&0x000000FF) |
+		((n>>8)&0x0000FF00) |
+		((n<<8)&0x00FF0000) |
+		((n<<24)&0xFF000000);
+}
+
+static inline short eswap_s16(short n) {
+	return (n>>8) | (n<<8);
+}
+
+WAV_hdr_t generate_WAV_header(output_t *o) {
+
+	WAV_hdr_t hdr;
+
+	hdr.ChunkID_BE = eswap_s32(0x52494646); // "RIFF"
+	int bytes_per_sample = o->bitdepth/8;
+	hdr.Subchunk2Size_LE = o->float32_buffer.num_samples_per_channel*o->channels*bytes_per_sample;
+
+	hdr.ChunkSize_LE = 36 + hdr.Subchunk2Size_LE;
+	hdr.Format_BE = eswap_s32(0x57415645); // "WAVE"
+	hdr.Subchunk1ID_BE = eswap_s32(0x666d7420); // "fmt "
+	hdr.Subchunk1Size_LE = 16; // 16 for PCM
+	hdr.AudioFormat_LE = 1; // 1 for PCM
+	hdr.NumChannels_LE = o->channels;
+	hdr.SampleRate_LE = o->samplerate;
+	hdr.ByteRate_LE = o->samplerate * o->channels * bytes_per_sample;
+	hdr.BlockAlign_LE = o->channels * bytes_per_sample;
+	hdr.BitsPerSample_LE = o->bitdepth;
+	hdr.Subchunk2ID_BE = eswap_s32(0x64617461); // "data"
+	return hdr;
+}
+
+
+
 static int get_trackname(expression_t *track_expr, track_t *t) {
 	char* index = NULL;
 
@@ -111,19 +147,52 @@ static int get_trackname(expression_t *track_expr, track_t *t) {
 
 }
 
+static void find_stuff_between_errmsg(char beg, char end, int error) {
+	error *= -1;
+	if (error & 0x1) {
+		fprintf(stderr, "find_stuff_between: error: beginning delimiter char (\'%c\') not found in input string.\n", beg);
+	}
+	if (error & 0x2) {
+		if (error == 0x2) {
+			fprintf(stderr, "find_stuff_between: error: unmatched delimiter \'%c\'! (expected a \'%c\'\n", beg, end);
+		}
+		else {
+			fprintf(stderr, "find_stuff_between: error: ending delimiter char (\'%c\') not found in input string.\n", end);
+		}
+	}
+	if (error & 0x4) {
+		fprintf(stderr, "find_stuff_between: error: ending token (\'%c\') encountered before beginning token (\'%c\')!\n", end, beg);
+	}
+
+}
+
 static int find_stuff_between(char beg, char end, char* input, char** output) {
 
 	char *block_beg = strchr(input, beg); 
 	char *block_end = strrchr(input, end); 
 
-	if (!block_beg || !block_end) { 
-//		fprintf(stderr, "find_stuff_between: error: token not found. \ninput: \"%s\", delims: beg: %c, end: %c\n", input, beg, end);
+	int error = 0;
+
+	if (!block_beg && !block_end) {
 		return 0;
 	}
 
-	else if (block_beg >= block_end) {
-		fprintf(stderr, "find_stuff_between: syntax error: beg = %c, end = %c\n", beg, end);
-		return -1;
+	if (!block_beg) {
+		error |= 0x1;
+	}
+	if (!block_end) { 
+		error |= 0x2;
+	}
+
+	if (block_beg >= block_end) {
+		error |= 0x4;
+	}
+
+	if (error) {
+		fprintf(stderr, "find_stuff_between: erroneous input:\"\n%s\n\", delims = %c, %c. error code %x\n", input, beg, end, error);
+		error *= -1;
+		find_stuff_between_errmsg(beg, end, error);
+		return error;
 	}
 
 	long b = block_beg - input;
@@ -135,17 +204,20 @@ static int find_stuff_between(char beg, char end, char* input, char** output) {
 }
 
 
-static int read_track(expression_t *track_expr, track_t *t) {
+static int read_track(expression_t *track_expr, track_t *t, song_t *s) {
 
 	// default vals
-	t->npb = 1;
+	t->notes_per_beat = 1;
 	t->channel = 0;
 	t->loop = 0;
 	t->active = 1;
 	t->transpose = 0;
+	t->reverse = 0;
+	t->inverse = 0;
+	t->equal_temperament_steps = 12;
 
 	char* track_args;
-	if (!find_stuff_between('(', ')', track_expr->statement, &track_args)) { return 0; }
+	if (find_stuff_between('(', ')', track_expr->statement, &track_args) <= 0) { return 0; }
 
 	dynamic_wlist_t *args = tokenize_wr_delim(track_args, ",");
 
@@ -169,7 +241,7 @@ static int read_track(expression_t *track_expr, track_t *t) {
 		if (strcmp(prop, "beatdiv") == 0) {
 			double v = 4;
 			convert_string_to_double(val, &v);
-			t->npb = v;
+			t->notes_per_beat = v;
 		}
 		else if (strcmp(prop, "channel") == 0) {
 			// channel = to!int(s[1]);		
@@ -220,6 +292,11 @@ static int read_track(expression_t *track_expr, track_t *t) {
 		++iter;
 	}
 
+	t->note_dur_s = (1.0/(t->notes_per_beat*(s->tempo_bpm/60.0)));
+	t->duration_s = t->num_notes * t->note_dur_s;
+	fprintf(stderr, "t.note_dur_s: %f, t.duration_s = %f\n", t->note_dur_s, t->duration_s);
+
+
 	char* track_contents;
 	if (!find_stuff_between('{', '}', track_expr->statement, &track_contents)) {
 		return 0;
@@ -249,6 +326,7 @@ static int read_track(expression_t *track_expr, track_t *t) {
 			t->notes[index].values = malloc(sizeof(int));
 			t->notes[index].values[0] = (int)strtol(iter, &end_ptr, 10);
 			t->notes[index].num_values = 1;
+			t->notes[index].duration_s = t->note_dur_s;
 			
 		} else {
 			dynamic_wlist_t *notes = tokenize_wr_delim(note_conts, " \t");
@@ -257,6 +335,7 @@ static int read_track(expression_t *track_expr, track_t *t) {
 				t->notes[index].values[i] = (int)strtol(notes->items[i], &end_ptr, 10);
 			}
 			t->notes[index].num_values = notes->num_items;
+			t->notes[index].duration_s = t->note_dur_s;
 			dynamic_wlist_destroy(notes);
 		}
 
@@ -298,7 +377,7 @@ int construct_song_struct(input_t *input, song_t *s) {
 	// defaults
 	s->tempo_bpm = 120;
 	s->tracks_constructed = 0;
-	s->duration = 10; // seconds
+	s->duration_s = 10; // seconds
 
 
 	s->tracks = malloc(s->active_track_ids->num_items * sizeof(track_t));
@@ -313,7 +392,7 @@ int construct_song_struct(input_t *input, song_t *s) {
 		int unknown = 1;
 		for (int i = 0; i < sizeof(keyword_action_pairs)/sizeof(keyword_action_pairs[0]); ++i) {
 			if (strcmp(w, keyword_action_pairs[i].keyword) == 0){
-				keyword_action_pairs[i].action(expriter, s);
+				if (!keyword_action_pairs[i].action(expriter, s)) { return 0; }
 				unknown = 0;
 				break;
 			}
@@ -351,25 +430,32 @@ int construct_song_struct(input_t *input, song_t *s) {
 	return 1;
 }
 
-static int sgen_dump(sgen_float32_buffer_t *fb, output_t *output) {
+static int sgen_dump(output_t *output) {
 	// defaulting to S16_LE
 	
-	static const char *outfname = "output_test.wavnoheader";
+	static const char *outfname = "output_test.wav";
+	
+	sgen_float32_buffer_t b = output->float32_buffer;	// short
 
-	size_t outbuf_size = fb->num_samples*sizeof(short);
+	long total_num_samples = output->channels*b.num_samples_per_channel;
+
+	size_t outbuf_size = total_num_samples*sizeof(short);
 	short *out_buffer = malloc(outbuf_size);
 	short short_max = 0x7FFF;
 
-	for (long i = 0; i < fb->num_samples; ++i) {
-		out_buffer[i] = (short)(0.5*short_max*(fb->buffer[i]));
+	for (long i = 0; i < total_num_samples; ++i) {
+		out_buffer[i] = (short)(0.5*short_max*(b.buffer[i]));
 	}
 
-	printf("sgen: dumping buffer of %ld samples to file %s.\n", fb->num_samples, outfname);
+	printf("sgen: dumping buffer of %ld samples to file %s.\n", b.num_samples_per_channel, outfname);
+
+	WAV_hdr_t wav_header = generate_WAV_header(output);
 
 	FILE *ofp = fopen(outfname, "w"); // "w" = truncate
 	if (!ofp) return 0;
+	fwrite(&wav_header, sizeof(WAV_hdr_t), 1, ofp);
 
-	fwrite(out_buffer, sizeof(short), fb->num_samples, ofp);
+	fwrite(out_buffer, sizeof(short), total_num_samples, ofp);
 	free(out_buffer);
 
 	fclose(ofp);
@@ -377,17 +463,14 @@ static int sgen_dump(sgen_float32_buffer_t *fb, output_t *output) {
 
 }
 
-static int track_synthesize(track_t *t, float bpm, float *lbuf, float *rbuf) {
-	printf("DEBUG: sgen: synthesizing track %s\n", t->name);
-	printf("props: loop = %d, active = %d, transpose = %d, channel = %d, npb = %f\n", t->loop, t->active, t->transpose, t->channel, t->npb);
+static int track_synthesize(track_t *t, long num_samples, float *lbuf, float *rbuf) {
+	printf("sgen: DEBUG: synthesizing track %s\n", t->name);
+	printf("props: loop = %d, active = %d, transpose = %d, channel = %d, notes_per_beat = %f\n", t->loop, t->active, t->transpose, t->channel, t->notes_per_beat);
+	printf("num_samples = %ld\n", num_samples);
 	if (!t->active) { return 0; }
-
-	const long num_samples = 2*10*44100;
-
-	float note_dur = (1.0/(t->npb*(bpm/60)));
-
-	long num_samples_per_note = ceil(44100*note_dur);
-	printf("note_dur: %f, num_samples_per_note = %ld\n", note_dur, num_samples_per_note);
+	
+	long num_samples_per_note = ceil(44100*t->note_dur_s);
+	printf("note_dur: %f, num_samples_per_note = %ld\n\n", t->note_dur_s, num_samples_per_note);
 
 	long lbuf_offset = 0;
 	long rbuf_offset = 0;
@@ -401,9 +484,7 @@ static int track_synthesize(track_t *t, float bpm, float *lbuf, float *rbuf) {
 		}
 
 		note_t *n = &t->notes[note_index];
-		envelope_t e;
-		float *nbuf = note_synthesize(n, note_dur, e, &waveform_triangle); 
-		// TODO: replace the gratuitous malloc in note_synthesize with a shared buffer, since the size is always the same
+		float *nbuf = note_synthesize(n, &waveform_triangle); 
 
 		long n_offset_l = lbuf_offset;
 		long n_offset_r = rbuf_offset;
@@ -436,37 +517,46 @@ static int track_synthesize(track_t *t, float bpm, float *lbuf, float *rbuf) {
 	return 1;
 }
 
-static sgen_float32_buffer_t song_synthesize(output_t *o, song_t *s) {
+static int song_synthesize(output_t *o, song_t *s) {
 
-	const long num_samples = 2*10*44100; // TODO: get real length from song_t
+	long num_samples_per_channel = s->duration_s*o->samplerate;
 
-	float *lbuf = malloc(num_samples*sizeof(float));
-	float *rbuf = malloc(num_samples*sizeof(float));
+	float *lbuf = malloc(num_samples_per_channel*sizeof(float));
+	float *rbuf = malloc(num_samples_per_channel*sizeof(float));
 
-	memset(lbuf, 0x0, num_samples*sizeof(float));
-	memset(rbuf, 0x0, num_samples*sizeof(float));
+	memset(lbuf, 0x0, num_samples_per_channel*sizeof(float));
+	memset(rbuf, 0x0, num_samples_per_channel*sizeof(float));
+
+	fprintf(stderr, "sgen: song_synthesize: num_samples_per_channel = %ld\n", num_samples_per_channel);
 
 	for (int i = 0; i < s->num_tracks; ++i) {
 		track_t *t = &s->tracks[i];
-		track_synthesize(t, s->tempo_bpm, lbuf, rbuf);
+
+		long num_samples = 0;
+		if (t->loop) num_samples = s->duration_s*o->samplerate;
+		else if (t->duration_s > s->duration_s) {
+			fprintf(stderr, "sgen: warning: track duration is longer than song duration, truncating!\n");
+			num_samples = s->duration_s*o->samplerate;
+		}
+		else num_samples = t->duration_s*o->samplerate;
+		track_synthesize(t, num_samples, lbuf, rbuf);
 	}
 
-	float *merged = malloc(2*num_samples*sizeof(float));
-	for (long i = 0; i < num_samples; ++i) {
+	long num_samples_merged = 2*num_samples_per_channel;
+	float *merged = malloc(num_samples_merged*sizeof(float));
+
+	for (long i = 0; i < num_samples_per_channel; ++i) {
 		merged[2*i] = lbuf[i];
 		merged[2*i+1] = rbuf[i];
-
-	//	fprintf(stderr, "%f, %f\n", merged[2*i], merged[2*i + 1]);
 	}
 
 	free(lbuf); 
 	free(rbuf);
 	
-	sgen_float32_buffer_t f;
-	f.buffer = merged;
-	f.num_samples = num_samples;
+	o->float32_buffer.buffer = merged;
+	o->float32_buffer.num_samples_per_channel = num_samples_per_channel;
 
-	return f;
+	return 1;
 }
 
 static long get_filesize(FILE *fp) {
@@ -484,7 +574,7 @@ int file_get_active_expressions(const char* filename, input_t *input) {
 
 	if (!fp) {
 		char *strerrorbuf = strerror(errno);
-		fprintf(stderr, "sgen: file_get_active_expressions: couldn't open file %s: %s", filename, strerrorbuf);
+		fprintf(stderr, "sgen: file_get_active_expressions: couldn't open file %s: %s\n", filename, strerrorbuf);
 		return 0;
 	}
 
@@ -555,12 +645,18 @@ int main(int argc, char* argv[]) {
 	}
 
 	song_t s;
-	output_t output;
+	output_t o;
+
+	// defaults
+	o.samplerate = 44100;
+	o.bitdepth = 16;
+	o.channels = 2;
+	o.format = S16_FORMAT_LE_STEREO;
+
 	if (!construct_song_struct(&input, &s)) return 1;
 
-	sgen_float32_buffer_t b = song_synthesize(&output, &s);
-
-	sgen_dump(&b, &output);
+	if (!song_synthesize(&o, &s)) return 1;
+	sgen_dump(&o);
 
 	return 0;
 }

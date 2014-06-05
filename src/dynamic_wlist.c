@@ -87,7 +87,7 @@ dynamic_wlist_t *tokenize_wr_delim(const char* input, const char* delim) {
 	char *exprbuf, *saveptr;
 
 	char *buf = sa_strdup(input);
-	size_t input_len = strlen(input);
+	//size_t input_len = strlen(input);
 
 	for (exprbuf = strtok_r(buf, delim, &saveptr); exprbuf != NULL; exprbuf = strtok_r(NULL, delim, &saveptr)) {
 		dynamic_wlist_append(wl, exprbuf);

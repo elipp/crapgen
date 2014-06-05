@@ -42,7 +42,7 @@ float waveform_sawtooth(float freq, float t, float phi) {
 
 float amplitude_envelope(float t, float d) {
 	float d_recip = 1.0/d;
-	// wtf.
+	// wtf. compute these from the envelope struct :dd
 	if (t < (1.0/4.0)*d) {
 		return ((4.0*d_recip)*t);
 	} else if (t < (2.0/4.0)*d) {
@@ -69,10 +69,10 @@ static float *freq_from_noteindex(note_t* note, float transpose) {
 }
 
 
-float *note_synthesize(note_t *note, float duration, envelope_t env, PFNWAVEFORM wform) {
+float *note_synthesize(note_t *note, PFNWAVEFORM wform) {
 // TODO: replace hard-coded values with output_t struct values!
 	float samplerate = 44100;
-	long num_samples = (long)ceil(duration*samplerate);
+	long num_samples = note->duration_s*samplerate;
 
 	float *samples = malloc(num_samples*sizeof(float)); 
 	memset(samples, 0x0, num_samples*sizeof(float));
@@ -88,7 +88,7 @@ float *note_synthesize(note_t *note, float duration, envelope_t env, PFNWAVEFORM
 		long j = 0;
 		float t = 0;
 		for (; j < num_samples; ++j) {
-			samples[j] += A*amplitude_envelope(t, duration)*wform(f, t, 0);
+			samples[j] += A*amplitude_envelope(t, note->duration_s)*wform(f, t, 0);
 			t += dt;
 		}
 	}

@@ -11,6 +11,6 @@ float waveform_triangle(float freq, float t, float phi);
 float waveform_sawtooth(float freq, float t, float phi);
 
 float amplitude_envelope(float t, float d);
-float *note_synthesize(note_t *note, float duration, envelope_t env, PFNWAVEFORM wform);
+float *note_synthesize(note_t *note, PFNWAVEFORM wform);
 
 #endif 

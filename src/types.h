@@ -37,21 +37,28 @@ typedef struct {
 	int *values;
 	long num_values;
 	int transpose;
+	float duration_s;
+	envelope_t env;
 } note_t;
 
 typedef struct {
 	char* name;
-	int sound_index;
-	int loop;
+
 	note_t *notes;
 	int num_notes;
+	
+	int sound_index;
+	int loop;
 	int active;
 	int transpose;
 	int channel; // 0x1 == left, 0x2 == right, 0x3 == both
 	int inverse;
 	int reverse;
-	float npb;
-//	this(char[] track_expr);
+	float notes_per_beat;
+	float equal_temperament_steps;
+	float duration_s;
+	float note_dur_s;
+
 } track_t;
 
 typedef struct {
@@ -59,9 +66,8 @@ typedef struct {
 	int num_tracks;
 	int tracks_constructed;
 	dynamic_wlist_t *active_track_ids;
-	float duration;
+	float duration_s;
 	float tempo_bpm;
-//	this(char[] song_expr);
 } song_t;
 
 enum SGEN_FORMATS {
@@ -69,18 +75,34 @@ enum SGEN_FORMATS {
 	S16_FORMAT_LE_STEREO = 1
 };
 
+// https://ccrma.stanford.edu/courses/422/projects/WaveFormat/
+typedef struct {
+	int ChunkID_BE;
+	int ChunkSize_LE;
+	int Format_BE;
+	int Subchunk1ID_BE;
+	int Subchunk1Size_LE;
+	short AudioFormat_LE;
+	short NumChannels_LE;
+	int SampleRate_LE;
+	int ByteRate_LE;
+	short BlockAlign_LE;
+	short BitsPerSample_LE;
+	int Subchunk2ID_BE;
+	int Subchunk2Size_LE;
+} WAV_hdr_t;
+
+typedef struct {
+	float *buffer;
+	long num_samples_per_channel;
+} sgen_float32_buffer_t;
+
 typedef struct {
 	int samplerate;// = 44100;
 	int channels;//  = 2;
 	int bitdepth;// = 16;
 	int format;// = SGEN_FORMATS.S16_FORMAT_LE_STEREO;
-//	int dump_to_file(short* data);
-//	int dump_to_stdout(short* data);
+	sgen_float32_buffer_t float32_buffer;
 } output_t;
-
-typedef struct {
-	float *buffer;
-	long num_samples;
-} sgen_float32_buffer_t;
 
 #endif
