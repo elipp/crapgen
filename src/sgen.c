@@ -476,11 +476,12 @@ static int track_synthesize(track_t *t, long num_samples, float *lbuf, float *rb
 	long rbuf_offset = 0;
 
 	int note_index = 0;
+
+
 	while (lbuf_offset < num_samples && rbuf_offset < num_samples) {
 		if (note_index >= t->num_notes - 1) {
 			if (!t->loop) { break; }
 			else { note_index = 0; }
-	//			fprintf(stderr, "setting note_index = 0\n");
 		}
 
 		note_t *n = &t->notes[note_index];
