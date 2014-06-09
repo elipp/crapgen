@@ -484,7 +484,7 @@ static int track_synthesize(track_t *t, long num_samples, float *lbuf, float *rb
 
 
 	while (lbuf_offset < num_samples && rbuf_offset < num_samples) {
-		if (note_index >= t->num_notes - 1) {
+		if (note_index >= t->num_notes) {
 			if (!t->loop) { break; }
 			else { note_index = 0; }
 		}

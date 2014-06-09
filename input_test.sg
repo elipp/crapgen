@@ -1,6 +1,6 @@
 version 0.01;
 
-tempo 40;
+tempo 20;
 duration 10;
 
 sample sample1("sound.wav");
@@ -20,7 +20,7 @@ track track3(beatdiv=8, sound=square, channel=left, loop=true, transpose=21) = {
 };
 
 track track4(beatdiv=10, sound=square, channel=right, loop=true, active=1, transpose=22) = {
-	50, 40, 30, 40, 50, 20
+	50, 40, 30, 40, 50, 20, 10
 };
 
 
