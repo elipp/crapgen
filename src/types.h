@@ -18,7 +18,10 @@ typedef struct {
 	float attack;
 	float decay;
 	float sustain;
+	float sustain_level;
 	float release;
+	float *envelope;
+	int num_samples;
 } envelope_t; 
 
 
@@ -38,7 +41,7 @@ typedef struct {
 	long num_values;
 	int transpose;
 	float duration_s;
-	envelope_t env;
+	envelope_t *env;
 } note_t;
 
 typedef struct {

@@ -9,6 +9,7 @@
 #include "string_allocator.h"
 #include "string_manip.h"
 #include "dynamic_wlist.h"
+#include "envelope.h"
 
 static int read_track(expression_t *track_expr, track_t *t, song_t *s);
 static int get_trackname(expression_t *track_expr, track_t *t);
@@ -83,6 +84,8 @@ int duration_action(expression_t *arg, song_t *s) {
 }
 int samplerate_action(expression_t *arg, song_t *s) { return 1; }
 
+int envelope_action(expression_t *arg, song_t *s) { printf("sgen: keyword envelope: NYI!\n"); return 1; }
+
 static const struct { 
 	const char* keyword; 
 	keywordfunc action; 
@@ -94,7 +97,8 @@ static const struct {
 { "version", version_action },
 { "tempo", tempo_action },
 { "duration", duration_action },
-{ "samplerate", samplerate_action }};
+{ "samplerate", samplerate_action },
+{ "envelope", envelope_action } };
 
 static inline int eswap_s32(int n) {
 	return ((n>>24)&0x000000FF) |
@@ -338,7 +342,8 @@ static int read_track(expression_t *track_expr, track_t *t, song_t *s) {
 			t->notes[index].duration_s = t->note_dur_s;
 			dynamic_wlist_destroy(notes);
 		}
-
+		
+		t->notes[index].env = default_envelope;
 		t->notes[index].transpose = t->transpose;
 //		fprintf(stderr, "note str: \"%s\", num_values = %ld\n", iter, t->notes[index].num_values);
 
@@ -625,6 +630,9 @@ int main(int argc, char* argv[]) {
 		fprintf(stderr, "sgen: No input files. Exiting.\n");
 		return 0;
 	}
+
+//	default_envelope = envelope_generate(2, 1, 4, 0.5, 3);
+	default_envelope = envelope_generate(0.1, 0.1, 5, 0.1, 2);
 
 	char *input_filename = argv[1];
 	input_t input = input_construct(input_filename);

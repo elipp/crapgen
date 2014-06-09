@@ -10,6 +10,7 @@
 
 #include "waveforms.h"
 #include "types.h"
+#include "envelope.h"
 
 static const float TWO_PI = (2*M_PI);
 static const float PI_PER_TWO = (M_PI/2);
@@ -88,7 +89,9 @@ float *note_synthesize(note_t *note, PFNWAVEFORM wform) {
 		long j = 0;
 		float t = 0;
 		for (; j < num_samples; ++j) {
-			samples[j] += A*amplitude_envelope(t, note->duration_s)*wform(f, t, 0);
+			float ea = envelope_get_amplitude_noprecalculate(j, num_samples, note->env);
+//			fprintf(stderr, "ea: %f\n", ea);
+			samples[j] += A*ea*wform(f, t, 0);
 			t += dt;
 		}
 	}
