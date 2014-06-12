@@ -12,26 +12,31 @@
 #include "envelope.h"
 #include "WAV.h"
 
-#define SGEN_ERROR(...) do {\
-	fprintf(stderr, "sgen: %s: error: ", __func__);\
-	fprintf(stderr, __VA_ARGS__);\
+#define SGEN_ERROR(fmt, ...) do {\
+	fprintf(stderr, "sgen: %s: error: " fmt, __func__, ## __VA_ARGS__);\
 	} while (0)
 
-#define SGEN_WARNING(...) do {\
-	printf("sgen: %s: warning: ", __func__);\
-	printf(__VA_ARGS__);\
+#define SGEN_WARNING(fmt, ...) do {\
+	printf("sgen: %s: warning: " fmt, __func__, ## __VA_ARGS__);\
 	} while (0)
 
 static int read_track(expression_t *track_expr, track_t *t, song_t *s);
-static int get_trackname(expression_t *track_expr, track_t *t);
+static char *get_primitive_identifier(expression_t *prim_expr);
+static int find_stuff_between(char beg, char end, char* input, char** output);
 
-int convert_string_to_double(const char* str, double *out) {
+static int convert_string_to_double(const char* str, double *out) {
 
 	char *endptr;
 	*out = strtod(str, &endptr);		
 
+	if (endptr == str) { 
+		SGEN_WARNING("strtod: no conversion performed! (input string: \"%s\")\n", str);
+		*out = 0;
+		return -1; 	
+	}
+
 	if (endptr && *endptr != '\0') {
-		fprintf(stderr, "strtod warning: full double conversion of string \"%s\" couldn't be performed\n", str);
+		SGEN_WARNING("strtod: full double conversion of string \"%s\" couldn't be performed\n", str);
 		return 0;
 	}
 	
@@ -45,7 +50,7 @@ int song_action(expression_t *arg, song_t *s) { return 1; } //dummy
 int track_action(expression_t *arg, song_t *s) { 
 
 	track_t t;
-	if (!get_trackname(arg, &t)) { return 0; }
+	if ((t.name = get_primitive_identifier(arg)) == NULL) { return 0; }
 	int active = 0;
 	for (int i = 0; i < s->active_track_ids->num_items; ++i) {
 		if (strcmp(s->active_track_ids->items[i], t.name) == 0) {
@@ -53,7 +58,7 @@ int track_action(expression_t *arg, song_t *s) {
 		}
 	}
 	if (!active) {
-		printf("sgen: warning: track \"%s\" defined but not used in a song block!\n", t.name);
+		SGEN_WARNING("track \"%s\" defined but not used in a song block!\n", t.name);
 		return 0;
 	}
 
@@ -66,7 +71,6 @@ int track_action(expression_t *arg, song_t *s) {
 }
 
 int sample_action(expression_t *arg, song_t *s) { printf("sgen: sample: NYI! :/\n"); return 1; }
-int version_action(expression_t *arg, song_t *s) { return 1; }
 int tempo_action(expression_t *arg, song_t *s) { 
 	if (arg->wlist->num_items < 2) {
 		SGEN_ERROR("error while parsing tempo directive. Defaulting to 120.\n");
@@ -83,7 +87,7 @@ int tempo_action(expression_t *arg, song_t *s) {
 
 int duration_action(expression_t *arg, song_t *s) { 
 	if (arg->wlist->num_items < 2) {
-		fprintf(stderr, "sgen: error while parsing duration directive. Defaulting to 10 seconds.\n");
+		SGEN_ERROR("invalid duration directive. Defaulting to 10 seconds.\n");
 		return 0;
 	}
 	char *endptr = NULL;
@@ -95,7 +99,52 @@ int duration_action(expression_t *arg, song_t *s) {
 }
 int samplerate_action(expression_t *arg, song_t *s) { return 1; }
 
-int envelope_action(expression_t *arg, song_t *s) { printf("sgen: keyword envelope: NYI!\n"); return 1; }
+int envelope_action(expression_t *arg, song_t *s) { 
+	if (arg->wlist->num_items < 2) {
+		SGEN_ERROR("invalid envelope input.\n");
+		return 0;
+	}
+	if (s->num_envelopes < 1) { s->envelopes = malloc(sizeof(envelope_t)); }
+	++s->num_envelopes;
+
+	s->envelopes = realloc(s->envelopes, s->num_envelopes*sizeof(envelope_t));	// TODO: this sux, lazy as hell 
+	char *envname;
+
+	if ((envname = get_primitive_identifier(arg)) == NULL) { return 0; }
+
+	// parse args
+
+	char *envelope_args;
+	if (find_stuff_between('(', ')', arg->statement, &envelope_args) <= 0) { return 0; }
+
+	dynamic_wlist_t *args = tokenize_wr_delim(envelope_args, ",");
+	sa_free(envelope_args);
+
+	float parms[5];
+	
+	if (args->num_items < 5) {
+		SGEN_WARNING("expected exactly 5 (ie. Attack, Decay, Sustain, Sustain Level on a scale of [0;1] & Release) numeric arguments, got %d\n", (int)args->num_items);
+		for (int i = 5 - args->num_items; i < 5; ++i) {
+			parms[i] = 1.0;
+		}
+	}
+	else {
+		for (int i = 0; i < ENV_NUM_PARMS; ++i) {
+			double o;
+			convert_string_to_double(args->items[i], &o);
+			parms[i] = o;
+		}
+	}
+
+	printf("sgen: found custom envelope \"%s\"\n", envname);
+	envelope_t *e = envelope_generate(envname, parms[ENV_ATTACK], parms[ENV_DECAY], parms[ENV_SUSTAIN], parms[ENV_SUSTAIN_LEVEL], parms[ENV_RELEASE]);
+
+	dynamic_wlist_destroy(args);
+
+	s->envelopes[s->num_envelopes-1] = *e;
+
+	return 1; 
+}
 
 static const struct { 
 	const char* keyword; 
@@ -105,44 +154,40 @@ static const struct {
 { "song", song_action}, 
 { "track", track_action }, 
 { "sample", sample_action },
-{ "version", version_action },
 { "tempo", tempo_action },
 { "duration", duration_action },
 { "samplerate", samplerate_action },
 { "envelope", envelope_action } };
 
 
-static int get_trackname(expression_t *track_expr, track_t *t) {
+static char* get_primitive_identifier(expression_t *track_expr) {
 	char* index = NULL;
 
 	char *w = track_expr->wlist->items[1];
 	if ((index = strchr(w, '(')) != NULL) {
-		t->name = tidy_string(substring(w, 0, index - w));
-		return 1;
+		return tidy_string(substring(w, 0, index - w));
 	}
 	else {
-		SGEN_ERROR("syntax error: must use argument list (\"()\", even if empty) before track contents (\"{}\").");
-		return 0;
+		SGEN_ERROR("syntax error: must use argument list (\"()\", even if empty) before primitive contents (\"{}\"). (got \"%s\")", track_expr->statement);
+		return NULL;
 	}
-
-
 }
 
 static void find_stuff_between_errmsg(char beg, char end, int error) {
 	error *= -1;
 	if (error & 0x1) {
-		fprintf(stderr, "find_stuff_between: error: beginning delimiter char (\'%c\') not found in input string.\n", beg);
+		SGEN_ERROR("beginning delimiter char (\'%c\') not found in input string.\n", beg);
 	}
 	if (error & 0x2) {
 		if (error == 0x2) {
-			fprintf(stderr, "find_stuff_between: error: unmatched delimiter \'%c\'! (expected a \'%c\'\n", beg, end);
+			SGEN_ERROR("unmatched delimiter \'%c\'! (expected a \'%c\'\n", beg, end);
 		}
 		else {
-			fprintf(stderr, "find_stuff_between: error: ending delimiter char (\'%c\') not found in input string.\n", end);
+			SGEN_ERROR("ending delimiter char (\'%c\') not found in input string.\n", end);
 		}
 	}
 	if (error & 0x4) {
-		fprintf(stderr, "find_stuff_between: error: ending token (\'%c\') encountered before beginning token (\'%c\')!\n", end, beg);
+		SGEN_ERROR("ending token (\'%c\') encountered before beginning token (\'%c\')!\n", end, beg);
 	}
 
 }
@@ -170,7 +215,7 @@ static int find_stuff_between(char beg, char end, char* input, char** output) {
 	}
 
 	if (error) {
-		fprintf(stderr, "find_stuff_between: erroneous input:\"\n%s\n\", delims = %c, %c. error code %x\n", input, beg, end, error);
+		SGEN_ERROR("erroneous input:\"\n%s\n\", delims = %c, %c. error code %x\n", input, beg, end, error);
 		error *= -1;
 		find_stuff_between_errmsg(beg, end, error);
 		return error;
@@ -197,6 +242,7 @@ static int read_track(expression_t *track_expr, track_t *t, song_t *s) {
 	t->inverse = 0;
 	t->equal_temperament_steps = 12;
 	t->sound = sounds[0];	// default, see waveforms.c
+	t->envelope = default_envelope;
 
 	char* track_args;
 	if (find_stuff_between('(', ')', track_expr->statement, &track_args) <= 0) { return 0; }
@@ -207,13 +253,13 @@ static int read_track(expression_t *track_expr, track_t *t, song_t *s) {
 		
 		char *iter = args->items[i];
 
-		dynamic_wlist_t *s = tokenize_wr_delim(iter, "=");
-		if (s->num_items < 2) { fprintf(stderr, "sgen: read_track: reading arg list failed; split(\"=\").length < 2!\""); continue; }
-		char *prop = tidy_string(s->items[0]);
-		char *val = tidy_string(s->items[1]);
+		dynamic_wlist_t *parms = tokenize_wr_delim(iter, "=");
+		if (parms->num_items < 2) { SGEN_ERROR("reading arg list failed; split(\"=\").length < 2!\""); continue; }
+		char *prop = tidy_string(parms->items[0]);
+		char *val = tidy_string(parms->items[1]);
 
 		if (!prop || !val) { 
-			fprintf(stderr, "sgen: read_track: error while parsing arg list (fmt: <prop>=<val>, got !prop || !val)\n"); 
+			SGEN_ERROR("error while parsing arg list (fmt: <prop>=<val>, got !prop || !val)\n"); 
 			continue; 
 		}
 
@@ -279,6 +325,22 @@ static int read_track(expression_t *track_expr, track_t *t, song_t *s) {
 		else if (strcmp(prop, "delay") == 0) {
 			// nyi
 		}
+		else if (strcmp(prop, "envelope") == 0) { 
+		// TODO: NOTE! CUSTOM ENVELOPES ARE NOT NECESSARILY CONSTRUCTED AT THIS STAGE. 
+		// "envelope" HAPPENS TO BE LEXICALLY PRECEDE "track", and qsort takes care of this. Fix that kk?
+			int found = 0;
+			for (int i = 0; i < s->num_envelopes; ++i) {
+				if (strcmp(val, s->envelopes[i].name) == 0) {
+					t->envelope = &s->envelopes[i];
+					found = 1;
+					printf("found envelope \"%s\" from list\n", val);
+					break;
+				}
+			}
+			if (!found) {
+				SGEN_WARNING("use of undefined envelope id \"%s\", defaulting to \"default\".\n", val);
+			}
+		}
 		else {
 			SGEN_WARNING("unknown track arg \"%s\", ignoring", prop);
 		}
@@ -286,16 +348,12 @@ static int read_track(expression_t *track_expr, track_t *t, song_t *s) {
 		sa_free(prop);
 		sa_free(val);
 
-		dynamic_wlist_destroy(s);
+		dynamic_wlist_destroy(parms);
 
 		++iter;
 	}
 
-	t->note_dur_s = (1.0/(t->notes_per_beat*(s->tempo_bpm/60.0)));
-	t->duration_s = t->num_notes * t->note_dur_s;
-	printf("t.note_dur_s: %f, t.duration_s = %f\n", t->note_dur_s, t->duration_s);
-
-
+	
 	char* track_contents;
 	if (!find_stuff_between('{', '}', track_expr->statement, &track_contents)) {
 		return 0;
@@ -309,6 +367,11 @@ static int read_track(expression_t *track_expr, track_t *t, song_t *s) {
 	t->notes = malloc(notelist->num_items * sizeof(note_t));
 	t->num_notes = notelist->num_items;
 	long index = 0;
+
+	t->note_dur_s = (1.0/(t->notes_per_beat*(s->tempo_bpm/60.0)));
+	t->duration_s = t->num_notes * t->note_dur_s;
+	printf("t.note_dur_s: %f, t.duration_s = %f\n", t->note_dur_s, t->duration_s);
+
 
 	for (int i = 0; i < notelist->num_items; ++i) {
 		char *iter = notelist->items[i];
@@ -338,14 +401,14 @@ static int read_track(expression_t *track_expr, track_t *t, song_t *s) {
 			dynamic_wlist_destroy(notes);
 		}
 		
-		t->notes[index].env = default_envelope;
+		t->notes[index].env = t->envelope;
 		t->notes[index].transpose = t->transpose;
 //		fprintf(stderr, "note str: \"%s\", num_values = %ld\n", iter, t->notes[index].num_values);
 
 		++index;
 	}
 
-//	printf("read_track: %s", t->name);
+	printf("\n");
 
 	return 1;
 
@@ -370,7 +433,7 @@ int construct_song_struct(input_t *input, song_t *s) {
 		}
 	}
 	if (!song_found) { 
-		printf("sgen: no song(){...} blocks found -> no input -> no output -> exiting.\n"); 
+		printf("sgen: no song(){...} blocks found -> no input -> no output -> exiting. (Syntax error in file?)\n"); 
 		return 0; 
 	}
 
@@ -378,7 +441,7 @@ int construct_song_struct(input_t *input, song_t *s) {
 	s->tempo_bpm = 120;
 	s->tracks_constructed = 0;
 	s->duration_s = 10; // seconds
-
+	s->num_envelopes = 0;
 
 	s->tracks = malloc(s->active_track_ids->num_items * sizeof(track_t));
 	s->num_tracks = s->active_track_ids->num_items;
@@ -569,6 +632,12 @@ static long get_filesize(FILE *fp) {
 	return size;
 }
 
+static int lexsort_expression_cmpfunc(const void* ea, const void *eb) {
+	const expression_t *a = ea;
+	const expression_t *b = eb;
+	return strcmp(a->statement, b->statement);
+}
+
 int file_get_active_expressions(const char* filename, input_t *input) {
 
 	FILE *fp = fopen(filename, "r");
@@ -603,6 +672,7 @@ int file_get_active_expressions(const char* filename, input_t *input) {
 	dynamic_wlist_destroy(exprs_wlist);
 	input->exprs = exprs;
 	input->num_active_exprs = num_exprs;
+	qsort(input->exprs, input->num_active_exprs, sizeof(*input->exprs), lexsort_expression_cmpfunc);
 
 	return 1;
 }
@@ -626,26 +696,18 @@ int main(int argc, char* argv[]) {
 		return 0;
 	}
 
+
 //	default_envelope = envelope_generate(2, 1, 4, 0.5, 3);
-	default_envelope = envelope_generate(0.1, 0.1, 5, 0.1, 2);
+	default_envelope = envelope_generate("default_envelope", 0.1, 0.1, 5, 0.1, 2);
 
 	char *input_filename = argv[1];
 	input_t input = input_construct(input_filename);
 	
+	printf("sgen v. %s. Written by Esa (2014)\n", sgen_version);
+
 	if (input.error != 0) { 
 		SGEN_ERROR("(fatal) erroneous input! Exiting.\n");
 		return 1;
-	}
-
-	if (strcmp(input.exprs[0].wlist->items[0], "version") != 0) {
-		SGEN_ERROR("missing \"version\" directive from the beginning!");
-		return 1;
-	} else {
-		char *file_version = input.exprs[0].wlist->items[1];
-		if (strcmp(file_version, sgen_version) != 0) {
-			SGEN_ERROR("compiler/input file version mismatch! (compiler: \"%s\", file \"%s\")\n", sgen_version, file_version);
-			return 1;
-		}
 	}
 
 	song_t s;

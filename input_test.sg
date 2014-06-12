@@ -1,11 +1,10 @@
-version 0.01;
-
 tempo 35;
 duration 10;
 
-sample sample1("sound.wav");
+#sample sample1("sound.wav");
+#sound sound1(sound=sample1);
 
-sound sound1(sound=sample1);
+envelope envelope1(0.1, 0.1, 5, 0.1, 2);
 
 track track1(beatdiv=4, channel=left, loop=true, transpose=20) = {
 	1, <15 21 25>, <21 15 43>, 3, 5, 3, 0, 5
@@ -16,7 +15,7 @@ track track2(beatdiv=6, sound=triangle, channel=right, loop=true, active=1, tran
 };
 
 track track3(beatdiv=3, sound=square, channel=l+r, loop=true, transpose=21) = {
-	<0 7 15>, <2 7 10 13>
+	<1 8 17>, <8 9 13>, <5 7 11 15>
 };
 
 track track4(beatdiv=5, sound=sine, channel=right, loop=true, active=1, transpose=22) = {

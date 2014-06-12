@@ -21,12 +21,19 @@ typedef struct {
 	PFNWAVEFORM wform;
 } sound_t;
 
+enum SGEN_ENV_PARMS {
+	ENV_ATTACK,
+	ENV_DECAY,
+	ENV_SUSTAIN,
+	ENV_SUSTAIN_LEVEL,
+	ENV_RELEASE,
+	ENV_NUM_PARMS
+};
+
+
 typedef struct { 
-	float attack;
-	float decay;
-	float sustain;
-	float sustain_level;
-	float release;
+	char *name;
+	float parms[5];
 	float *envelope;
 	int num_samples;
 } envelope_t; 
@@ -67,6 +74,7 @@ typedef struct {
 	float duration_s;
 	float note_dur_s;
 	sound_t sound;
+	envelope_t *envelope;
 
 } track_t;
 
