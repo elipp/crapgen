@@ -12,6 +12,16 @@
 #include "envelope.h"
 #include "WAV.h"
 
+#define SGEN_ERROR(...) do {\
+	fprintf(stderr, "sgen: %s: error: ", __func__);\
+	fprintf(stderr, __VA_ARGS__);\
+	} while (0)
+
+#define SGEN_WARNING(...) do {\
+	printf("sgen: %s: warning: ", __func__);\
+	printf(__VA_ARGS__);\
+	} while (0)
+
 static int read_track(expression_t *track_expr, track_t *t, song_t *s);
 static int get_trackname(expression_t *track_expr, track_t *t);
 
@@ -47,7 +57,7 @@ int track_action(expression_t *arg, song_t *s) {
 		return 0;
 	}
 
-	if (!read_track(arg, &t, s)) { fprintf(stderr, "read_track failure. syntax error(?)\n"); return 0; }
+	if (!read_track(arg, &t, s)) { SGEN_ERROR("syntax error(?)\n"); return 0; }
 
 	s->tracks[s->tracks_constructed] = t;
 	++s->tracks_constructed;
@@ -59,7 +69,7 @@ int sample_action(expression_t *arg, song_t *s) { printf("sgen: sample: NYI! :/\
 int version_action(expression_t *arg, song_t *s) { return 1; }
 int tempo_action(expression_t *arg, song_t *s) { 
 	if (arg->wlist->num_items < 2) {
-		fprintf(stderr, "sgen: error while parsing tempo directive. Defaulting to 120.\n");
+		SGEN_ERROR("error while parsing tempo directive. Defaulting to 120.\n");
 		return 0;
 	}
 
@@ -111,7 +121,7 @@ static int get_trackname(expression_t *track_expr, track_t *t) {
 		return 1;
 	}
 	else {
-		fprintf(stderr, "read_track: syntax error: must use argument list (\"()\", even if empty) before track contents (\"{}\").");
+		SGEN_ERROR("syntax error: must use argument list (\"()\", even if empty) before track contents (\"{}\").");
 		return 0;
 	}
 
@@ -186,6 +196,7 @@ static int read_track(expression_t *track_expr, track_t *t, song_t *s) {
 	t->reverse = 0;
 	t->inverse = 0;
 	t->equal_temperament_steps = 12;
+	t->sound = sounds[0];	// default, see waveforms.c
 
 	char* track_args;
 	if (find_stuff_between('(', ')', track_expr->statement, &track_args) <= 0) { return 0; }
@@ -197,12 +208,12 @@ static int read_track(expression_t *track_expr, track_t *t, song_t *s) {
 		char *iter = args->items[i];
 
 		dynamic_wlist_t *s = tokenize_wr_delim(iter, "=");
-		if (s->num_items < 2) { fprintf(stderr, "read_track: reading arg list failed; split(\"=\").length < 2!\""); continue; }
+		if (s->num_items < 2) { fprintf(stderr, "sgen: read_track: reading arg list failed; split(\"=\").length < 2!\""); continue; }
 		char *prop = tidy_string(s->items[0]);
 		char *val = tidy_string(s->items[1]);
 
 		if (!prop || !val) { 
-			fprintf(stderr, "read_track: error while parsing arg list (fmt: <prop>=<val>, got !prop || !val)\n"); 
+			fprintf(stderr, "sgen: read_track: error while parsing arg list (fmt: <prop>=<val>, got !prop || !val)\n"); 
 			continue; 
 		}
 
@@ -222,12 +233,26 @@ static int read_track(expression_t *track_expr, track_t *t, song_t *s) {
 			else if (strcmp(val, "right") == 0 || strcmp(val, "r") == 0) {
 				t->channel |= 0x2;
 			}
+			else if (strcmp(val, "stereo") == 0 || strcmp(val, "both") == 0 || strcmp(val, "l+r") == 0) {
+				t->channel = 0x1 | 0x2;
+			}
 			else {
-				fprintf(stderr, "read_track: args: unrecognized channel option \"%s\". defaulting to stereo (l+r)", val);
+				SGEN_WARNING("args: unrecognized channel option \"%s\". defaulting to stereo (l+r)", val);
 			}
 		}
 		else if (strcmp(prop, "sound") == 0) {
-			//			sound = to!int(s[1]);
+			int found = 0;
+			for (int i = 0; i < num_sounds; ++i) {
+				if (strcmp(val, sounds[i].name) == 0) {
+					printf("track %s: found sound prop with val \"%s\"\n", t->name, val);
+					t->sound = sounds[i];
+					found = 1;
+					break;
+				}
+			}
+			if (!found) {
+				SGEN_WARNING("track %s: undefined sound nameid \"%s\", defaulting to sine.\n", t->name, val);
+			}
 		}
 		else if (strcmp(prop, "reverse") == 0) {
 			// nyi
@@ -251,8 +276,11 @@ static int read_track(expression_t *track_expr, track_t *t, song_t *s) {
 			t->transpose = strtod(val, &endptr);
 			// check errno
 		}
+		else if (strcmp(prop, "delay") == 0) {
+			// nyi
+		}
 		else {
-			fprintf(stderr, "read_track: warning: unknown track arg \"%s\", ignoring", prop);
+			SGEN_WARNING("unknown track arg \"%s\", ignoring", prop);
 		}
 
 		sa_free(prop);
@@ -265,7 +293,7 @@ static int read_track(expression_t *track_expr, track_t *t, song_t *s) {
 
 	t->note_dur_s = (1.0/(t->notes_per_beat*(s->tempo_bpm/60.0)));
 	t->duration_s = t->num_notes * t->note_dur_s;
-	fprintf(stderr, "t.note_dur_s: %f, t.duration_s = %f\n", t->note_dur_s, t->duration_s);
+	printf("t.note_dur_s: %f, t.duration_s = %f\n", t->note_dur_s, t->duration_s);
 
 
 	char* track_contents;
@@ -290,7 +318,7 @@ static int read_track(expression_t *track_expr, track_t *t, song_t *s) {
 
 		if ((ret = find_stuff_between('<', '>', iter, &note_conts)) < 0) {
 			// syntax error
-			fprintf(stderr, "read_track: track %s: syntax error in note \"%s\"!", t->name, note_conts);
+			SGEN_ERROR("track %s: syntax error in note \"%s\"!", t->name, note_conts);
 			return 0;
 		}
 		else if (ret == 0) {
@@ -389,13 +417,13 @@ int construct_song_struct(input_t *input, song_t *s) {
 		}
 		if (!match) {
 			++have_undefined;
-			fprintf(stderr, "sgen: song: error: use of undefined track \"%s\"!\n", tname);
+			SGEN_ERROR(" use of undefined track \"%s\"!\n", tname);
 			//break;
 		}
 	}
 
 	if (have_undefined) { 
-		fprintf(stderr, "sgen: construct_song_struct: undefined tracks used.\n");
+		SGEN_ERROR("(fatal) undefined tracks used, exiting.\n");
 		return 0;
 	}
 
@@ -457,7 +485,7 @@ static int track_synthesize(track_t *t, long num_samples, float *lbuf, float *rb
 		}
 
 		note_t *n = &t->notes[note_index];
-		float *nbuf = note_synthesize(n, &waveform_triangle); 
+		float *nbuf = note_synthesize(n, t->sound.wform);
 
 		long n_offset_l = lbuf_offset;
 		long n_offset_r = rbuf_offset;
@@ -500,7 +528,7 @@ static int song_synthesize(output_t *o, song_t *s) {
 	memset(lbuf, 0x0, num_samples_per_channel*sizeof(float));
 	memset(rbuf, 0x0, num_samples_per_channel*sizeof(float));
 
-	fprintf(stderr, "sgen: song_synthesize: num_samples_per_channel = %ld\n", num_samples_per_channel);
+	printf("sgen: song_synthesize: num_samples_per_channel = %ld\n", num_samples_per_channel);
 
 	for (int i = 0; i < s->num_tracks; ++i) {
 		track_t *t = &s->tracks[i];
@@ -508,7 +536,7 @@ static int song_synthesize(output_t *o, song_t *s) {
 		long num_samples = 0;
 		if (t->loop) num_samples = s->duration_s*o->samplerate;
 		else if (t->duration_s > s->duration_s) {
-			fprintf(stderr, "sgen: warning: track duration is longer than song duration, truncating!\n");
+			SGEN_WARNING("track duration is longer than song duration, truncating!\n");
 			num_samples = s->duration_s*o->samplerate;
 		}
 		else num_samples = t->duration_s*o->samplerate;
@@ -547,7 +575,7 @@ int file_get_active_expressions(const char* filename, input_t *input) {
 
 	if (!fp) {
 		char *strerrorbuf = strerror(errno);
-		fprintf(stderr, "sgen: file_get_active_expressions: couldn't open file %s: %s\n", filename, strerrorbuf);
+		SGEN_ERROR("couldn't open file %s: %s\n", filename, strerrorbuf);
 		return 0;
 	}
 
@@ -594,7 +622,7 @@ int main(int argc, char* argv[]) {
 	static const char* sgen_version = "0.01";
 
 	if (argc < 2) {
-		fprintf(stderr, "sgen: No input files. Exiting.\n");
+		fprintf(stderr,"sgen: No input files. Exiting.\n");
 		return 0;
 	}
 
@@ -605,17 +633,17 @@ int main(int argc, char* argv[]) {
 	input_t input = input_construct(input_filename);
 	
 	if (input.error != 0) { 
-		fprintf(stderr, "sgen: fatal: erroneous input! exiting.\n");
+		SGEN_ERROR("(fatal) erroneous input! Exiting.\n");
 		return 1;
 	}
 
 	if (strcmp(input.exprs[0].wlist->items[0], "version") != 0) {
-		fprintf(stderr, "sgen: error: missing version directive from the beginning!");
+		SGEN_ERROR("missing \"version\" directive from the beginning!");
 		return 1;
 	} else {
 		char *file_version = input.exprs[0].wlist->items[1];
 		if (strcmp(file_version, sgen_version) != 0) {
-			fprintf(stderr, "sgen: fatal: compiler/input file version mismatch! (compiler: \"%s\", file \"%s\")\n", sgen_version, file_version);
+			SGEN_ERROR("compiler/input file version mismatch! (compiler: \"%s\", file \"%s\")\n", sgen_version, file_version);
 			return 1;
 		}
 	}

@@ -14,6 +14,13 @@ typedef struct {
 	dynamic_wlist_t *wlist;
 } expression_t;
 
+typedef float (*PFNWAVEFORM)(float, float, float);
+
+typedef struct {
+	const char *name;
+	PFNWAVEFORM wform;
+} sound_t;
+
 typedef struct { 
 	float attack;
 	float decay;
@@ -23,7 +30,6 @@ typedef struct {
 	float *envelope;
 	int num_samples;
 } envelope_t; 
-
 
 typedef struct {
 	char *filename;
@@ -50,7 +56,6 @@ typedef struct {
 	note_t *notes;
 	int num_notes;
 	
-	int sound_index;
 	int loop;
 	int active;
 	int transpose;
@@ -61,17 +66,10 @@ typedef struct {
 	float equal_temperament_steps;
 	float duration_s;
 	float note_dur_s;
+	sound_t sound;
 
 } track_t;
 
-typedef struct {
-	track_t* tracks;
-	int num_tracks;
-	int tracks_constructed;
-	dynamic_wlist_t *active_track_ids;
-	float duration_s;
-	float tempo_bpm;
-} song_t;
 
 enum SGEN_FORMATS {
 	S16_FORMAT_LE_MONO = 0,
@@ -107,5 +105,16 @@ typedef struct {
 	int format;// = SGEN_FORMATS.S16_FORMAT_LE_STEREO;
 	sgen_float32_buffer_t float32_buffer;
 } output_t;
+
+typedef struct {
+	track_t* tracks;
+	int num_tracks;
+	int tracks_constructed;
+	dynamic_wlist_t *active_track_ids;
+	float duration_s;
+	float tempo_bpm;
+	envelope_t *envelopes;
+	int num_envelopes;
+} song_t;
 
 #endif

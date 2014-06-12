@@ -1,6 +1,6 @@
 version 0.01;
 
-tempo 20;
+tempo 35;
 duration 10;
 
 sample sample1("sound.wav");
@@ -8,19 +8,19 @@ sample sample1("sound.wav");
 sound sound1(sound=sample1);
 
 track track1(beatdiv=4, channel=left, loop=true, transpose=20) = {
-	1, <15 21 25>, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17
+	1, <15 21 25>, <21 15 43>, 3, 5, 3, 0, 5
 };
 
-track track2(beatdiv=6, sound=square, channel=right, loop=true, active=1, transpose=20) = {
-	16, 10, 8, 16, 10, 8, 16, 10, 8, 16, 10, 5	
+track track2(beatdiv=6, sound=triangle, channel=right, loop=true, active=1, transpose=20) = {
+	5, 3, 7, 9, 13, 10, 8
 };
 
-track track3(beatdiv=8, sound=square, channel=left, loop=true, transpose=21) = {
-	31, 15, 31, 31, 15, 31, 15
+track track3(beatdiv=3, sound=square, channel=l+r, loop=true, transpose=21) = {
+	<0 7 15>, <2 7 10 13>
 };
 
-track track4(beatdiv=10, sound=square, channel=right, loop=true, active=1, transpose=22) = {
-	50, 40, 30, 40, 50, 20, 10
+track track4(beatdiv=5, sound=sine, channel=right, loop=true, active=1, transpose=22) = {
+	30, 37, 44, 25
 };
 
 

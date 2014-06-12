@@ -15,7 +15,6 @@
 static const float TWO_PI = (2*M_PI);
 static const float PI_PER_TWO = (M_PI/2);
 
-
 float waveform_sine(float freq, float t, float phi) {
 	return sin(TWO_PI*freq*t + phi);
 }
@@ -41,29 +40,22 @@ float waveform_sawtooth(float freq, float t, float phi) {
 	return (-2*phase + 1);
 }
 
-float amplitude_envelope(float t, float d) {
-	float d_recip = 1.0/d;
-	// wtf. compute these from the envelope struct :dd
-	if (t < (1.0/4.0)*d) {
-		return ((4.0*d_recip)*t);
-	} else if (t < (2.0/4.0)*d) {
-		return ((-2.0)*d_recip)*t + (3.0/2.0);
-	} else if (t < (3.0/4.0)*d) {
-		return 0.5;
-	} else {
-		return ((-2.0*d_recip)*t + 2.0);
-	}
+const sound_t sounds[] = {
+	{ "default", waveform_sine },
+	{ "sine", waveform_sine },
+	{ "square", waveform_square },
+	{ "triangle", waveform_triangle },
+	{ "sawtooth", waveform_sawtooth }
+};
 
-}
+const size_t num_sounds = sizeof(sounds)/sizeof(sounds[0]);
 
 static float *freq_from_noteindex(note_t* note, float transpose) {
 	static const float twelve_equal_coeff = 1.05946309436; // 2^(1/12)
 	static const float low_c = 32.7032;
 	float *pitches = malloc(note->num_values*sizeof(float));
-//	fprintf(stderr, "note->num_values: %d, note->values[0] = %d\n", note->num_values, note->values[0]);
 	for (int i = 0; i < note->num_values; ++i) {
 		pitches[i] = low_c * pow(twelve_equal_coeff, note->values[i] + transpose);
-//		fprintf(stderr, "pitch: %f\n", pitches[i]);
 	}
 
 	return pitches;
