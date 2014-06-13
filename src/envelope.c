@@ -88,6 +88,7 @@ float envelope_get_amplitude_noprecalculate(int snum, int num_samples, envelope_
 static inline float randomfloat01() { return (float)rand()/(float)RAND_MAX; }
 
 envelope_t random_envelope() {
-	envelope_t e = envelope_generate("rnd", randomfloat01(), randomfloat01(), randomfloat01(), randomfloat01(), randomfloat01(), randomfloat01());
+	envelope_t e = 
+	envelope_generate("rnd", randomfloat01(), 0.01, randomfloat01(), randomfloat01(), randomfloat01(), randomfloat01());
 	return e;
 }
