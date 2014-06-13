@@ -80,5 +80,14 @@ int find_stuff_between(char beg, char end, char* input, char** output) {
 
 }
 
+long get_filesize(FILE *fp) {
+	long size = 0;
+	long prevoff = ftell(fp);
+	fseek(fp, 0, SEEK_END);
+	size = ftell(fp);
+	fseek(fp, prevoff, SEEK_SET);
+	return size;
+}
+
 
 	

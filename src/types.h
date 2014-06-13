@@ -22,6 +22,7 @@ typedef struct {
 } sound_t;
 
 enum SGEN_ENV_PARMS {
+	ENV_AMPLITUDE,
 	ENV_ATTACK,
 	ENV_DECAY,
 	ENV_SUSTAIN,
@@ -30,10 +31,15 @@ enum SGEN_ENV_PARMS {
 	ENV_NUM_PARMS
 };
 
+enum ENVELOPE_MODES {
+	ENV_FIXED,
+	ENV_RANDOM_PER_TRACK,
+	ENV_RANDOM_PER_NOTE
+};
 
 typedef struct { 
 	char *name;
-	float parms[5];
+	float parms[6];
 	float *envelope;
 	int num_samples;
 } envelope_t; 
@@ -76,9 +82,9 @@ typedef struct {
 	float note_dur_s;
 	sound_t sound;
 	envelope_t *envelope;
+	int envelope_mode;
 
 } track_t;
-
 
 enum SGEN_FORMATS {
 	S16_FORMAT_LE_MONO = 0,

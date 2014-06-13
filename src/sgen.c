@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <math.h>
 #include <errno.h>
+#include <time.h>
 
 #include "utils.h"
 #include "types.h"
@@ -94,11 +95,11 @@ int envelope_action(expression_t *arg, song_t *s) {
 	dynamic_wlist_t *args = tokenize_wr_delim(envelope_args, ",");
 	sa_free(envelope_args);
 
-	float parms[5];
+	float parms[ENV_NUM_PARMS];
 	
-	if (args->num_items < 5) {
-		SGEN_WARNING("expected exactly 5 (ie. Attack, Decay, Sustain, Sustain Level on a scale of [0;1] & Release) numeric arguments, got %d\n", (int)args->num_items);
-		for (int i = 5 - args->num_items; i < 5; ++i) {
+	if (args->num_items < 6) {
+		SGEN_WARNING("expected exactly %d (ie. Amplitude [0;1], Attack, Decay, Sustain, Sustain Level on a scale of [0;1] & Release) numeric arguments, got %d\n", ENV_NUM_PARMS, (int)args->num_items);
+		for (int i = ENV_NUM_PARMS - args->num_items; i < ENV_NUM_PARMS; ++i) {
 			parms[i] = 1.0;
 		}
 	}
@@ -111,8 +112,8 @@ int envelope_action(expression_t *arg, song_t *s) {
 	}
 
 	printf("sgen: found custom envelope \"%s\"\n", envname);
-	envelope_t *e = envelope_generate(envname, parms[ENV_ATTACK], parms[ENV_DECAY], parms[ENV_SUSTAIN], parms[ENV_SUSTAIN_LEVEL], parms[ENV_RELEASE]);
-
+	envelope_t *e = malloc(sizeof(envelope_t));
+	*e = envelope_generate(envname, 0.1, parms[ENV_ATTACK], parms[ENV_DECAY], parms[ENV_SUSTAIN], parms[ENV_SUSTAIN_LEVEL], parms[ENV_RELEASE]);
 	dynamic_wlist_destroy(args);
 
 	s->envelopes[s->num_envelopes-1] = *e;
@@ -160,7 +161,8 @@ static int read_track(expression_t *track_expr, track_t *t, song_t *s) {
 	t->inverse = 0;
 	t->equal_temperament_steps = 12;
 	t->sound = sounds[0];	// default, see waveforms.c
-	t->envelope = default_envelope;
+	t->envelope = &default_envelope;
+	t->envelope_mode = ENV_FIXED;
 
 	char* track_args;
 	if (find_stuff_between('(', ')', track_expr->statement, &track_args) <= 0) { return 0; }
@@ -198,6 +200,10 @@ static int read_track(expression_t *track_expr, track_t *t, song_t *s) {
 		++iter;
 	}
 
+	if (t->envelope_mode == ENV_RANDOM_PER_TRACK) {
+		t->envelope = malloc(sizeof(envelope_t));
+		*t->envelope = random_envelope();
+	}
 	
 	char* track_contents;
 	if (!find_stuff_between('{', '}', track_expr->statement, &track_contents)) {
@@ -246,7 +252,13 @@ static int read_track(expression_t *track_expr, track_t *t, song_t *s) {
 			dynamic_wlist_destroy(notes);
 		}
 		
-		t->notes[index].env = t->envelope;
+		if (t->envelope_mode == ENV_RANDOM_PER_NOTE) {
+			t->notes[index].env = malloc(sizeof(envelope_t));
+			*t->notes[index].env = random_envelope();
+		} else {
+			t->notes[index].env = t->envelope;
+		}
+
 		t->notes[index].transpose = t->transpose;
 //		fprintf(stderr, "note str: \"%s\", num_values = %ld\n", iter, t->notes[index].num_values);
 
@@ -468,15 +480,6 @@ static int song_synthesize(output_t *o, song_t *s) {
 	return 1;
 }
 
-static long get_filesize(FILE *fp) {
-	long size = 0;
-	long prevoff = ftell(fp);
-	fseek(fp, 0, SEEK_END);
-	size = ftell(fp);
-	fseek(fp, prevoff, SEEK_SET);
-	return size;
-}
-
 static int lexsort_expression_cmpfunc(const void* ea, const void *eb) {
 	const expression_t *a = ea;
 	const expression_t *b = eb;
@@ -502,8 +505,6 @@ int file_get_active_expressions(const char* filename, input_t *input) {
 	fclose(fp);
 
 	dynamic_wlist_t *exprs_wlist = tokenize_wr_delim_tidy(raw_buf, ";");
-	//dynamic_wlist_print(exprs_wlist);
-
 	free(raw_buf);
 
 	long num_exprs = exprs_wlist->num_items;
@@ -541,9 +542,9 @@ int main(int argc, char* argv[]) {
 		return 0;
 	}
 
+	srand(time(NULL));
 
-//	default_envelope = envelope_generate(2, 1, 4, 0.5, 3);
-	default_envelope = envelope_generate("default_envelope", 0.1, 0.1, 5, 0.1, 2);
+	default_envelope = envelope_generate("default_envelope", 1.0, 0.1, 0.1, 5, 0.1, 2);
 
 	char *input_filename = argv[1];
 	input_t input = input_construct(input_filename);

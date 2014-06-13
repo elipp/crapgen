@@ -83,7 +83,7 @@ float *note_synthesize(note_t *note, PFNWAVEFORM wform) {
 		for (; j < num_samples; ++j) {
 			float ea = envelope_get_amplitude_noprecalculate(j, num_samples, note->env);
 //			fprintf(stderr, "ea: %f\n", ea);
-			samples[j] += A*ea*wform(f, t, 0);
+			samples[j] += note->env->parms[ENV_AMPLITUDE]*A*ea*wform(f, t, 0);
 			t += dt;
 		}
 	}

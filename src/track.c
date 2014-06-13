@@ -5,6 +5,7 @@
 #include "track.h"
 #include "utils.h"
 #include "waveforms.h"
+#include "envelope.h"
 
 static int boolean_str_true(const char* str) {
 	if ((strcmp(str, "true") == 0 || strcmp(str, "1") == 0)) return 1;
@@ -103,6 +104,18 @@ static int track_envelope_action(const char* val, track_t* t, song_t* s) {
 	// TODO: NOTE! CUSTOM ENVELOPES ARE NOT NECESSARILY CONSTRUCTED AT THIS STAGE. 
 	// "envelope" HAPPENS TO BE LEXICALLY PRECEDE "track", and qsort takes care of this. Fix that kk?
 	// also, replace song_t with sgen_ctx_t
+
+	if (strcmp(val, "random-per-note") == 0) {
+		t->envelope_mode = ENV_RANDOM_PER_NOTE;
+		return 1;
+	}
+
+	else if (strcmp(val, "random-per-track") == 0) {
+		t->envelope_mode = ENV_RANDOM_PER_TRACK;
+		t->envelope = malloc(sizeof(envelope_t));
+		*t->envelope = random_envelope();
+		return 1;
+	}
 
 	int found = 0;
 	for (int i = 0; i < s->num_envelopes; ++i) {

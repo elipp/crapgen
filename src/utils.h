@@ -14,5 +14,7 @@
 
 int convert_string_to_double(const char* str, double *out);
 int find_stuff_between(char beg, char end, char* input, char** output);
-	
+long get_filesize(FILE *fp);
+
+
 #endif

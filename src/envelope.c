@@ -1,23 +1,27 @@
 #include <stdio.h>
+#include <math.h>
+#include <time.h>
 #include "types.h"
 
-envelope_t *default_envelope;
+envelope_t default_envelope;
 
-envelope_t *envelope_generate(char* name, float a, float d, float s, float sl, float r) {
+envelope_t envelope_generate(char* name, float amplitude, float a, float d, float s, float sl, float r) {
 
-	envelope_t *e = malloc(sizeof(envelope_t));
-	e->name = name;
+	envelope_t e;
+	e.name = name;
 	float sum = a + d + s + r;
 	// normalize parms
 
-	e->parms[ENV_ATTACK] = a/sum;
-	e->parms[ENV_DECAY] = d/sum;
-	e->parms[ENV_SUSTAIN] = s/sum;
-	e->parms[ENV_SUSTAIN_LEVEL] = sl;
-	e->parms[ENV_RELEASE] = r/sum;
+	e.parms[ENV_AMPLITUDE] = amplitude;
+	e.parms[ENV_ATTACK] = a/sum;
+	e.parms[ENV_DECAY] = d/sum;
+	e.parms[ENV_SUSTAIN] = s/sum;
+	e.parms[ENV_SUSTAIN_LEVEL] = sl;
+	e.parms[ENV_RELEASE] = r/sum;
 
 	printf("sgen: envelope_generate: id = %s, a = %f, d = %f, s = %f, sl = %f, r = %f\n", name, 
-	e->parms[ENV_ATTACK], e->parms[ENV_DECAY], e->parms[ENV_SUSTAIN], e->parms[ENV_SUSTAIN_LEVEL], e->parms[ENV_RELEASE]);
+	e.parms[ENV_ATTACK], e.parms[ENV_DECAY], e.parms[ENV_SUSTAIN], e.parms[ENV_SUSTAIN_LEVEL], e.parms[ENV_RELEASE]);
+
 	return e;
 }
 
@@ -70,9 +74,20 @@ float envelope_get_amplitude_noprecalculate(int snum, int num_samples, envelope_
 	float kAD = (sl - 1.0)/sd;
 	float kSR = -(sl/sr);
 
-	if (snum < sa) return snum/sa;
-	else if (snum < sa + sd) return kAD*(snum - sa) + 1.0;
-	else if (snum < sa + sd + ss) return sl;
-	else return kSR * (snum - num_samples);
+	float R = 0;
+
+	if (snum < sa) R = snum/sa;
+	else if (snum < sa + sd) R = kAD*(snum - sa) + 1.0;
+	else if (snum < sa + sd + ss) R = sl;
+	else R = kSR * (snum - num_samples);
+
+	return R;
 
 }	
+
+static inline float randomfloat01() { return (float)rand()/(float)RAND_MAX; }
+
+envelope_t random_envelope() {
+	envelope_t e = envelope_generate("rnd", randomfloat01(), randomfloat01(), randomfloat01(), randomfloat01(), randomfloat01(), randomfloat01());
+	return e;
+}
