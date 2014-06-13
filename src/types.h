@@ -69,6 +69,7 @@ typedef struct {
 	int channel; // 0x1 == left, 0x2 == right, 0x3 == both
 	int inverse;
 	int reverse;
+	float delay;
 	float notes_per_beat;
 	float equal_temperament_steps;
 	float duration_s;
@@ -124,5 +125,28 @@ typedef struct {
 	envelope_t *envelopes;
 	int num_envelopes;
 } song_t;
+
+typedef int (*PFNTRACKPROPACTION)(const char* val, track_t*, song_t*);
+
+typedef struct {
+	const char* prop;
+	const char* valid_values[32];
+	int num_valid_values;
+	PFNTRACKPROPACTION action;
+} track_prop_action_t;
+
+typedef struct {
+	// primitives
+
+	envelope_t *envelopes;
+	int num_envelopes;
+
+	track_t *tracks;
+	int num_tracks;
+
+	song_t *songs;
+	int num_songs;
+
+} sgen_ctx_t;
 
 #endif

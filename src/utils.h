@@ -1,0 +1,18 @@
+#ifndef UTILS_H
+#define UTILS_H
+
+#include <stdio.h>
+#include <stdlib.h>
+
+#define SGEN_ERROR(fmt, ...) do {\
+	fprintf(stderr, "sgen: %s: error: " fmt, __func__, ## __VA_ARGS__);\
+	} while (0)
+
+#define SGEN_WARNING(fmt, ...) do {\
+	printf("sgen: %s: warning: " fmt, __func__, ## __VA_ARGS__);\
+	} while (0)
+
+int convert_string_to_double(const char* str, double *out);
+int find_stuff_between(char beg, char end, char* input, char** output);
+	
+#endif

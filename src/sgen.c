@@ -4,45 +4,19 @@
 #include <math.h>
 #include <errno.h>
 
-#include "waveforms.h"
+#include "utils.h"
 #include "types.h"
+#include "waveforms.h"
 #include "string_allocator.h"
 #include "string_manip.h"
 #include "dynamic_wlist.h"
 #include "envelope.h"
 #include "WAV.h"
-
-#define SGEN_ERROR(fmt, ...) do {\
-	fprintf(stderr, "sgen: %s: error: " fmt, __func__, ## __VA_ARGS__);\
-	} while (0)
-
-#define SGEN_WARNING(fmt, ...) do {\
-	printf("sgen: %s: warning: " fmt, __func__, ## __VA_ARGS__);\
-	} while (0)
+#include "track.h"
 
 static int read_track(expression_t *track_expr, track_t *t, song_t *s);
 static char *get_primitive_identifier(expression_t *prim_expr);
-static int find_stuff_between(char beg, char end, char* input, char** output);
 
-static int convert_string_to_double(const char* str, double *out) {
-
-	char *endptr;
-	*out = strtod(str, &endptr);		
-
-	if (endptr == str) { 
-		SGEN_WARNING("strtod: no conversion performed! (input string: \"%s\")\n", str);
-		*out = 0;
-		return -1; 	
-	}
-
-	if (endptr && *endptr != '\0') {
-		SGEN_WARNING("strtod: full double conversion of string \"%s\" couldn't be performed\n", str);
-		return 0;
-	}
-	
-	return 1;
-}
-	
 typedef int (*keywordfunc)(expression_t*, song_t*);
 
 int song_action(expression_t *arg, song_t *s) { return 1; } //dummy
@@ -173,62 +147,6 @@ static char* get_primitive_identifier(expression_t *track_expr) {
 	}
 }
 
-static void find_stuff_between_errmsg(char beg, char end, int error) {
-	error *= -1;
-	if (error & 0x1) {
-		SGEN_ERROR("beginning delimiter char (\'%c\') not found in input string.\n", beg);
-	}
-	if (error & 0x2) {
-		if (error == 0x2) {
-			SGEN_ERROR("unmatched delimiter \'%c\'! (expected a \'%c\'\n", beg, end);
-		}
-		else {
-			SGEN_ERROR("ending delimiter char (\'%c\') not found in input string.\n", end);
-		}
-	}
-	if (error & 0x4) {
-		SGEN_ERROR("ending token (\'%c\') encountered before beginning token (\'%c\')!\n", end, beg);
-	}
-
-}
-
-static int find_stuff_between(char beg, char end, char* input, char** output) {
-
-	char *block_beg = strchr(input, beg); 
-	char *block_end = strrchr(input, end); 
-
-	int error = 0;
-
-	if (!block_beg && !block_end) {
-		return 0;
-	}
-
-	if (!block_beg) {
-		error |= 0x1;
-	}
-	if (!block_end) { 
-		error |= 0x2;
-	}
-
-	if (block_beg >= block_end) {
-		error |= 0x4;
-	}
-
-	if (error) {
-		SGEN_ERROR("erroneous input:\"\n%s\n\", delims = %c, %c. error code %x\n", input, beg, end, error);
-		error *= -1;
-		find_stuff_between_errmsg(beg, end, error);
-		return error;
-	}
-
-	long b = block_beg - input;
-	long nc = block_end - block_beg - 1;
-
-	*output = substring(input, b+1, nc); // input[(block_beg+1)..block_end];
-	return 1;
-
-}
-
 
 static int read_track(expression_t *track_expr, track_t *t, song_t *s) {
 
@@ -264,85 +182,12 @@ static int read_track(expression_t *track_expr, track_t *t, song_t *s) {
 		}
 
 		printf("track %s: prop \"%s\" = \"%s\"\n", t->name, prop, val);
-		
-		char *endptr;
-		if (strcmp(prop, "beatdiv") == 0) {
-			double v = 4;
-			convert_string_to_double(val, &v);
-			t->notes_per_beat = v;
-		}
-		else if (strcmp(prop, "channel") == 0) {
-			// channel = to!int(s[1]);		
-			if (strcmp(val, "left") == 0 || strcmp(val, "l") == 0) {
-				t->channel |= 0x1;
-			}
-			else if (strcmp(val, "right") == 0 || strcmp(val, "r") == 0) {
-				t->channel |= 0x2;
-			}
-			else if (strcmp(val, "stereo") == 0 || strcmp(val, "both") == 0 || strcmp(val, "l+r") == 0) {
-				t->channel = 0x1 | 0x2;
-			}
-			else {
-				SGEN_WARNING("args: unrecognized channel option \"%s\". defaulting to stereo (l+r)", val);
-			}
-		}
-		else if (strcmp(prop, "sound") == 0) {
-			int found = 0;
-			for (int i = 0; i < num_sounds; ++i) {
-				if (strcmp(val, sounds[i].name) == 0) {
-					printf("track %s: found sound prop with val \"%s\"\n", t->name, val);
-					t->sound = sounds[i];
-					found = 1;
-					break;
-				}
-			}
-			if (!found) {
-				SGEN_WARNING("track %s: undefined sound nameid \"%s\", defaulting to sine.\n", t->name, val);
-			}
-		}
-		else if (strcmp(prop, "reverse") == 0) {
-			// nyi
-		}
-		else if (strcmp(prop, "inverse") == 0) {
-			// nyi
-		}
-		else if (strcmp(prop, "equal_temperament_steps") == 0) {
-			// enables non-standard scales to be used
-			// nyi
-		}
-		else if (strcmp(prop, "loop") == 0) {
-			if (strcmp(val, "true") == 0) t->loop = 1;
-		}
 
-		else if (strcmp(prop, "active") == 0) {
-			if (strcmp(val, "false") == 0 || strcmp(val, "0") == 0) t->active = 0;
-		}
-
-		else if (strcmp(prop, "transpose") == 0)  {
-			t->transpose = strtod(val, &endptr);
-			// check errno
-		}
-		else if (strcmp(prop, "delay") == 0) {
-			// nyi
-		}
-		else if (strcmp(prop, "envelope") == 0) { 
-		// TODO: NOTE! CUSTOM ENVELOPES ARE NOT NECESSARILY CONSTRUCTED AT THIS STAGE. 
-		// "envelope" HAPPENS TO BE LEXICALLY PRECEDE "track", and qsort takes care of this. Fix that kk?
-			int found = 0;
-			for (int i = 0; i < s->num_envelopes; ++i) {
-				if (strcmp(val, s->envelopes[i].name) == 0) {
-					t->envelope = &s->envelopes[i];
-					found = 1;
-					printf("found envelope \"%s\" from list\n", val);
-					break;
-				}
+		for (int i = 0; i < num_track_prop_actions; ++i) {
+			const track_prop_action_t *ta = &track_prop_actions[i];
+			if (strcmp(prop, ta->prop) == 0) {
+				if (!ta->action(val, t, s)) return 0;
 			}
-			if (!found) {
-				SGEN_WARNING("use of undefined envelope id \"%s\", defaulting to \"default\".\n", val);
-			}
-		}
-		else {
-			SGEN_WARNING("unknown track arg \"%s\", ignoring", prop);
 		}
 
 		sa_free(prop);
