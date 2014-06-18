@@ -3,20 +3,22 @@
 
 #include <stdlib.h>
 
+typedef struct sgen_ctx_t sgen_ctx_t;
+
 typedef struct {
 	char **items;
 	long num_items;
 	long capacity;
 } dynamic_wlist_t;
 
-typedef struct {
+typedef struct expression_t {
 	char* statement;
 	dynamic_wlist_t *wlist;
 } expression_t;
 
 typedef float (*PFNWAVEFORM)(float, float, float);
 
-typedef struct {
+typedef struct sound_t {
 	const char *name;
 	PFNWAVEFORM wform;
 } sound_t;
@@ -37,14 +39,14 @@ enum ENVELOPE_MODES {
 	ENV_RANDOM_PER_NOTE
 };
 
-typedef struct { 
+typedef struct envelope_t { 
 	char *name;
 	float parms[6];
 	float *envelope;
 	int num_samples;
 } envelope_t; 
 
-typedef struct {
+typedef struct input_t {
 	char *filename;
 	size_t filesize;
 	expression_t *exprs;
@@ -55,7 +57,7 @@ typedef struct {
 struct articulation_t; //nyi
 struct filter_t; //nyi
 
-typedef struct {
+typedef struct note_t {
 	int *values;
 	long num_values;
 	int transpose;
@@ -63,7 +65,7 @@ typedef struct {
 	envelope_t *env;
 } note_t;
 
-typedef struct {
+typedef struct track_t {
 	char* name;
 
 	note_t *notes;
@@ -77,7 +79,7 @@ typedef struct {
 	int reverse;
 	float delay;
 	float notes_per_beat;
-	float equal_temperament_steps;
+	float eqtemp_coef;
 	float duration_s;
 	float note_dur_s;
 	sound_t sound;
@@ -86,13 +88,15 @@ typedef struct {
 
 } track_t;
 
+typedef int (*PFNTRACKPROPACTION)(const char* val, track_t*, sgen_ctx_t*);
+
 enum SGEN_FORMATS {
 	S16_FORMAT_LE_MONO = 0,
 	S16_FORMAT_LE_STEREO = 1
 };
 
 // https://ccrma.stanford.edu/courses/422/projects/WaveFormat/
-typedef struct {
+typedef struct WAV_hdr_t {
 	int ChunkID_BE;
 	int ChunkSize_LE;
 	int Format_BE;
@@ -108,20 +112,21 @@ typedef struct {
 	int Subchunk2Size_LE;
 } WAV_hdr_t;
 
-typedef struct {
+typedef struct sgen_float32_buffer_t {
 	float *buffer;
 	long num_samples_per_channel;
 } sgen_float32_buffer_t;
 
-typedef struct {
-	int samplerate;// = 44100;
-	int channels;//  = 2;
-	int bitdepth;// = 16;
-	int format;// = SGEN_FORMATS.S16_FORMAT_LE_STEREO;
+typedef struct output_t {
+	int samplerate;
+	int channels;
+	int bitdepth;
+	int format;
 	sgen_float32_buffer_t float32_buffer;
 } output_t;
 
-typedef struct {
+typedef struct song_t {
+	char *name;
 	track_t* tracks;
 	int num_tracks;
 	int tracks_constructed;
@@ -132,17 +137,19 @@ typedef struct {
 	int num_envelopes;
 } song_t;
 
-typedef int (*PFNTRACKPROPACTION)(const char* val, track_t*, song_t*);
 
-typedef struct {
+typedef struct track_prop_action_t {
 	const char* prop;
-	const char* valid_values[32];
+	const char* valid_values[16]; // TODO: this is crap.
 	int num_valid_values;
 	PFNTRACKPROPACTION action;
 } track_prop_action_t;
 
-typedef struct {
+typedef struct sgen_ctx_t {
 	// primitives
+
+	float tempo_bpm;
+	float duration_s;
 
 	envelope_t *envelopes;
 	int num_envelopes;

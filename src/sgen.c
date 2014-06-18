@@ -14,75 +14,101 @@
 #include "envelope.h"
 #include "WAV.h"
 #include "track.h"
+#include "timer.h"
 
-static int read_track(expression_t *track_expr, track_t *t, song_t *s);
+static int read_track(expression_t *track_expr, track_t *t, sgen_ctx_t *c);
+static int read_song(expression_t *track_expr, song_t *s, sgen_ctx_t *c);
+
 static char *get_primitive_identifier(expression_t *prim_expr);
 
-typedef int (*keywordfunc)(expression_t*, song_t*);
+typedef int (*keywordfunc)(expression_t*, sgen_ctx_t*);
 
-int song_action(expression_t *arg, song_t *s) { return 1; } //dummy
+int song_action(expression_t *arg, sgen_ctx_t *c) { 
 
-int track_action(expression_t *arg, song_t *s) { 
+	song_t s;
+
+	if (c->num_songs == 0) { c->songs = malloc(sizeof(song_t)); }
+	++c->num_songs;
+
+	c->songs = realloc(c->songs, c->num_songs*sizeof(song_t));
+
+	if (!read_song(arg, &s, c)) return 0;
+
+	printf("found song block with tracks: ");
+	dynamic_wlist_print(s.active_track_ids);
+
+	c->songs[c->num_songs-1] = s;
+
+	return 1; 
+} 
+
+int track_action(expression_t *arg, sgen_ctx_t *c) { 
+
+	if (c->num_tracks == 0) { c->tracks = malloc(sizeof(track_t)); }
+	++c->num_tracks;
+
+	c->tracks = realloc(c->tracks, c->num_tracks*sizeof(track_t));
 
 	track_t t;
-	if ((t.name = get_primitive_identifier(arg)) == NULL) { return 0; }
-	int active = 0;
-	for (int i = 0; i < s->active_track_ids->num_items; ++i) {
-		if (strcmp(s->active_track_ids->items[i], t.name) == 0) {
-			active = 1;
-		}
-	}
-	if (!active) {
-		SGEN_WARNING("track \"%s\" defined but not used in a song block!\n", t.name);
-		return 0;
-	}
+	if (!read_track(arg, &t, c)) return 0;
 
-	if (!read_track(arg, &t, s)) { SGEN_ERROR("syntax error(?)\n"); return 0; }
-
-	s->tracks[s->tracks_constructed] = t;
-	++s->tracks_constructed;
+	c->tracks[c->num_tracks-1] = t;
 
 	return 1;
 }
 
-int sample_action(expression_t *arg, song_t *s) { printf("sgen: sample: NYI! :/\n"); return 1; }
-int tempo_action(expression_t *arg, song_t *s) { 
+int sample_action(expression_t *arg, sgen_ctx_t *c) { 
+	printf("sgen: sample: NYI! :/\n"); 
+	return 1; 
+}
+
+int tempo_action(expression_t *arg, sgen_ctx_t *c) { 
+
 	if (arg->wlist->num_items < 2) {
 		SGEN_ERROR("error while parsing tempo directive. Defaulting to 120.\n");
 		return 0;
 	}
 
-	char *endptr = NULL;
 	char *val = arg->wlist->items[1];
-	s->tempo_bpm = strtol(val, &endptr, 10);
+
+	double d;
+
+	convert_string_to_double(val, &d);
+	c->tempo_bpm = d;
+
 	printf("sgen: found tempo directive: \"%s\" bpm.\n", val);
 
 	return 1; 
 }
 
-int duration_action(expression_t *arg, song_t *s) { 
+int duration_action(expression_t *arg, sgen_ctx_t *c) { 
 	if (arg->wlist->num_items < 2) {
 		SGEN_ERROR("invalid duration directive. Defaulting to 10 seconds.\n");
 		return 0;
 	}
-	char *endptr = NULL;
+	
 	char *val = arg->wlist->items[1];
-	s->duration_s = strtod(val, &endptr);
+
+	double d;
+	convert_string_to_double(val, &d);
+	c->duration_s = d;
+
 	printf("sgen: found duration directive: \"%s\" s.\n", val);
 	return 1; 
-	
 }
-int samplerate_action(expression_t *arg, song_t *s) { return 1; }
 
-int envelope_action(expression_t *arg, song_t *s) { 
+int samplerate_action(expression_t *arg, sgen_ctx_t *c) { return 1; }
+
+int envelope_action(expression_t *arg, sgen_ctx_t *c) { 
+
 	if (arg->wlist->num_items < 2) {
 		SGEN_ERROR("invalid envelope input.\n");
 		return 0;
 	}
-	if (s->num_envelopes < 1) { s->envelopes = malloc(sizeof(envelope_t)); }
-	++s->num_envelopes;
+	if (c->num_envelopes < 1) { c->envelopes = malloc(sizeof(envelope_t)); }
+	++c->num_envelopes;
 
-	s->envelopes = realloc(s->envelopes, s->num_envelopes*sizeof(envelope_t));	// TODO: this sux, lazy as hell 
+	c->envelopes = realloc(c->envelopes, c->num_envelopes*sizeof(envelope_t));	// TODO: this sux, lazy as hell 
 	char *envname;
 
 	if ((envname = get_primitive_identifier(arg)) == NULL) { return 0; }
@@ -98,7 +124,7 @@ int envelope_action(expression_t *arg, song_t *s) {
 	float parms[ENV_NUM_PARMS];
 	
 	if (args->num_items < 6) {
-		SGEN_WARNING("expected exactly %d (ie. Amplitude [0;1], Attack, Decay, Sustain, Sustain Level on a scale of [0;1] & Release) numeric arguments, got %d\n", ENV_NUM_PARMS, (int)args->num_items);
+		SGEN_WARNING("expected exactly %d (ie. Amplitude [0;1], Attack, Decay, Sustain, Sustain Level [0;1] & Release) numeric arguments, got %d\n", ENV_NUM_PARMS, (int)args->num_items);
 		for (int i = ENV_NUM_PARMS - args->num_items; i < ENV_NUM_PARMS; ++i) {
 			parms[i] = 1.0;
 		}
@@ -116,7 +142,7 @@ int envelope_action(expression_t *arg, song_t *s) {
 	*e = envelope_generate(envname, 0.1, parms[ENV_ATTACK], parms[ENV_DECAY], parms[ENV_SUSTAIN], parms[ENV_SUSTAIN_LEVEL], parms[ENV_RELEASE]);
 	dynamic_wlist_destroy(args);
 
-	s->envelopes[s->num_envelopes-1] = *e;
+	c->envelopes[c->num_envelopes-1] = *e;
 
 	return 1; 
 }
@@ -149,9 +175,9 @@ static char* get_primitive_identifier(expression_t *track_expr) {
 }
 
 
-static int read_track(expression_t *track_expr, track_t *t, song_t *s) {
+static int read_track(expression_t *track_expr, track_t *t, sgen_ctx_t *c) {
 
-	// default vals
+	// default vals. TODO: replace this with something cuter
 	t->notes_per_beat = 1;
 	t->channel = 0;
 	t->loop = 0;
@@ -159,10 +185,12 @@ static int read_track(expression_t *track_expr, track_t *t, song_t *s) {
 	t->transpose = 0;
 	t->reverse = 0;
 	t->inverse = 0;
-	t->equal_temperament_steps = 12;
-	t->sound = sounds[0];	// default, see waveforms.c
+	t->eqtemp_coef = pow(2, (1.0/12.0));	// 12-equal-temperament
+	t->sound = sounds[0];
 	t->envelope = &default_envelope;
 	t->envelope_mode = ENV_FIXED;
+
+	if ((t->name = get_primitive_identifier(track_expr)) == NULL) { return 0; }
 
 	char* track_args;
 	if (find_stuff_between('(', ')', track_expr->statement, &track_args) <= 0) { return 0; }
@@ -188,7 +216,7 @@ static int read_track(expression_t *track_expr, track_t *t, song_t *s) {
 		for (int i = 0; i < num_track_prop_actions; ++i) {
 			const track_prop_action_t *ta = &track_prop_actions[i];
 			if (strcmp(prop, ta->prop) == 0) {
-				if (!ta->action(val, t, s)) return 0;
+				if (!ta->action(val, t, c)) return 0;
 			}
 		}
 
@@ -219,9 +247,9 @@ static int read_track(expression_t *track_expr, track_t *t, song_t *s) {
 	t->num_notes = notelist->num_items;
 	long index = 0;
 
-	t->note_dur_s = (1.0/(t->notes_per_beat*(s->tempo_bpm/60.0)));
+	t->note_dur_s = (1.0/(t->notes_per_beat*(c->tempo_bpm/60.0)));
 	t->duration_s = t->num_notes * t->note_dur_s;
-	printf("t.note_dur_s: %f, t.duration_s = %f\n", t->note_dur_s, t->duration_s);
+	printf("t->note_dur_s: %f, t->duration_s = %f\n", t->note_dur_s, t->duration_s);
 
 
 	for (int i = 0; i < notelist->num_items; ++i) {
@@ -265,43 +293,15 @@ static int read_track(expression_t *track_expr, track_t *t, song_t *s) {
 		++index;
 	}
 
+
+
 	printf("\n");
 
 	return 1;
 
 }
 
-int construct_song_struct(input_t *input, song_t *s) {
-	// find song block
-
-	expression_t *exprs = input->exprs;
-
-	int song_found = 0;
-	for (int i = 0; i < input->num_active_exprs; ++i) {
-		expression_t *e = &exprs[i];
-		if (strcmp(e->wlist->items[0], "song") == 0) {
-			song_found = 1;
-			char* tracks;
-			if (!find_stuff_between('{', '}', e->statement, &tracks)) return 0;
-			s->active_track_ids = tokenize_wr_delim_tidy(tracks, ",");
-
-			printf("found song block with tracks: ");
-			dynamic_wlist_print(s->active_track_ids);
-		}
-	}
-	if (!song_found) { 
-		printf("sgen: no song(){...} blocks found -> no input -> no output -> exiting. (Syntax error in file?)\n"); 
-		return 0; 
-	}
-
-	// defaults
-	s->tempo_bpm = 120;
-	s->tracks_constructed = 0;
-	s->duration_s = 10; // seconds
-	s->num_envelopes = 0;
-
-	s->tracks = malloc(s->active_track_ids->num_items * sizeof(track_t));
-	s->num_tracks = s->active_track_ids->num_items;
+int construct_sgen_ctx(input_t *input, sgen_ctx_t *c) {
 
 	for (int i = 0; i < input->num_active_exprs; ++i) {
 		expression_t *expriter = &input->exprs[i];
@@ -312,7 +312,7 @@ int construct_song_struct(input_t *input, song_t *s) {
 		int unknown = 1;
 		for (int i = 0; i < sizeof(keyword_action_pairs)/sizeof(keyword_action_pairs[0]); ++i) {
 			if (strcmp(w, keyword_action_pairs[i].keyword) == 0){
-				if (!keyword_action_pairs[i].action(expriter, s)) { return 0; }
+				if (!keyword_action_pairs[i].action(expriter, c)) { return 0; }
 				unknown = 0;
 				break;
 			}
@@ -323,22 +323,50 @@ int construct_song_struct(input_t *input, song_t *s) {
 
 	}
 
+	if (c->num_songs == 0) { 
+		printf("sgen: no song(){...} blocks found -> no input -> no output -> exiting. (Syntax error in file?)\n"); 
+		return 0; 
+	}
+
+	return 1;
+
+
+}
+
+int read_song(expression_t *arg, song_t *s, sgen_ctx_t *c) {
+
+	if ((s->name = get_primitive_identifier(arg)) == NULL) { return 0; }
+
+	char* tracks;
+	if (!find_stuff_between('{', '}', arg->statement, &tracks)) return 0;
+	s->active_track_ids = tokenize_wr_delim_tidy(tracks, ",");
+
+	// defaults
+	s->tempo_bpm = 120;
+	s->tracks_constructed = 0;
+	s->duration_s = c->duration_s; // seconds
+	s->num_envelopes = 0;
+
+	s->tracks = malloc(s->active_track_ids->num_items * sizeof(track_t));
+	s->num_tracks = s->active_track_ids->num_items;
+
 	int have_undefined = 0;
 
 	for (int i = 0; i < s->active_track_ids->num_items; ++i) {
 		int match = 0;
 		char *tname = s->active_track_ids->items[i];
-		for (int j = 0; j < s->num_tracks; ++j) {
-			char *stname = s->tracks[j].name;
+		for (int j = 0; j < c->num_tracks; ++j) {
+			char *stname = c->tracks[j].name;
 			if (strcmp(tname, stname) == 0) {
+				s->tracks[i] = c->tracks[j];
 				match = 1;
 				break;
 			}
 		}
 		if (!match) {
 			++have_undefined;
-			SGEN_ERROR(" use of undefined track \"%s\"!\n", tname);
-			//break;
+			SGEN_ERROR("%s: use of undefined track \"%s\"!\n", s->name, tname);
+			return 0;
 		}
 	}
 
@@ -351,7 +379,6 @@ int construct_song_struct(input_t *input, song_t *s) {
 }
 
 static int sgen_dump(output_t *output) {
-	// defaulting to S16_LE
 	
 	static const char *outfname = "output_test.wav";
 	
@@ -361,10 +388,9 @@ static int sgen_dump(output_t *output) {
 
 	size_t outbuf_size = total_num_samples*sizeof(short);
 	short *out_buffer = malloc(outbuf_size);
-	short short_max = 0x7FFF;
 
 	for (long i = 0; i < total_num_samples; ++i) {
-		out_buffer[i] = (short)(0.5*short_max*(b.buffer[i]));
+		out_buffer[i] = (short)(0.5*SHORT_MAX*(b.buffer[i]));
 	}
 
 	printf("sgen: dumping buffer of %ld samples to file %s.\n", b.num_samples_per_channel, outfname);
@@ -384,19 +410,25 @@ static int sgen_dump(output_t *output) {
 }
 
 static int track_synthesize(track_t *t, long num_samples, float *lbuf, float *rbuf) {
-	printf("sgen: DEBUG: synthesizing track %s\n", t->name);
+
+	printf("sgen: synthesizing track %s\n", t->name);
 	printf("props: loop = %d, active = %d, transpose = %d, channel = %d, notes_per_beat = %f\n", t->loop, t->active, t->transpose, t->channel, t->notes_per_beat);
 	printf("num_samples = %ld\n", num_samples);
 	if (!t->active) { return 0; }
 	
-	long num_samples_per_note = ceil(44100*t->note_dur_s);
+	float samplerate = 44100.0;	// get this from the output_t struct
+	
+	long num_samples_per_note = samplerate*t->note_dur_s;
 	printf("note_dur: %f, num_samples_per_note = %ld\n\n", t->note_dur_s, num_samples_per_note);
 
 	long lbuf_offset = 0;
 	long rbuf_offset = 0;
 
 	int note_index = 0;
+	float freqs[64];
 
+	float *n_samples = malloc(num_samples_per_note*sizeof(float));
+	memset(n_samples, 0x0, num_samples_per_note*sizeof(float));
 
 	while (lbuf_offset < num_samples && rbuf_offset < num_samples) {
 		if (note_index >= t->num_notes) {
@@ -405,7 +437,29 @@ static int track_synthesize(track_t *t, long num_samples, float *lbuf, float *rb
 		}
 
 		note_t *n = &t->notes[note_index];
-		float *nbuf = note_synthesize(n, t->sound.wform);
+
+		// if (!num_samples_per_note is bigger than the previous one) n_samples = realloc(n_samples, new_n*sizeof(float)); 
+		// this only goes for the dynamic lilypond-esque note input system, which is yet to be implemented
+
+		float dt = 1.0/samplerate;
+		float A = 1.0/n->num_values;
+
+		freq_from_noteindex(n, n->transpose, t->eqtemp_coef, freqs);
+		memset(n_samples, 0x0, num_samples_per_note*sizeof(float));
+	
+		if (n->num_values == 1 && n->values[0] == 0) {
+			// skip this, 0 -> rest
+			goto increment;
+		}
+
+		for (int i = 0; i < n->num_values; ++i) {
+			float time = 0;
+			for (long j = 0; j < num_samples_per_note; ++j) {
+				float ea = envelope_get_amplitude_noprecalculate(j, num_samples_per_note, n->env);
+				n_samples[j] += n->env->parms[ENV_AMPLITUDE]*A*ea*t->sound.wform(freqs[i], time, 0);
+				time += dt;
+			}
+		}
 
 		long n_offset_l = lbuf_offset;
 		long n_offset_r = rbuf_offset;
@@ -413,7 +467,7 @@ static int track_synthesize(track_t *t, long num_samples, float *lbuf, float *rb
 		if (t->channel & 0x1) {
 			long i = 0;
 			while (i < num_samples_per_note && n_offset_l < num_samples) {
-				lbuf[n_offset_l] += nbuf[i];
+				lbuf[n_offset_l] += n_samples[i];
 				++i;
 				++n_offset_l;
 			}
@@ -422,19 +476,21 @@ static int track_synthesize(track_t *t, long num_samples, float *lbuf, float *rb
 		if (t->channel & 0x2) {
 			long i = 0;
 			while (i < num_samples_per_note && n_offset_r < num_samples) {
-				rbuf[n_offset_r] += nbuf[i];
+				rbuf[n_offset_r] += n_samples[i];
 				++i;
 				++n_offset_r;
 			}
 		}
 
+increment:
+
 		lbuf_offset += num_samples_per_note;
 		rbuf_offset += num_samples_per_note;
-
-		free(nbuf);
-
 		++note_index;
 	}
+
+	free(n_samples);
+
 	return 1;
 }
 
@@ -477,6 +533,7 @@ static int song_synthesize(output_t *o, song_t *s) {
 	o->float32_buffer.buffer = merged;
 	o->float32_buffer.num_samples_per_channel = num_samples_per_channel;
 
+
 	return 1;
 }
 
@@ -518,7 +575,9 @@ int file_get_active_expressions(const char* filename, input_t *input) {
 	dynamic_wlist_destroy(exprs_wlist);
 	input->exprs = exprs;
 	input->num_active_exprs = num_exprs;
-	qsort(input->exprs, input->num_active_exprs, sizeof(*input->exprs), lexsort_expression_cmpfunc);
+
+	// didn't even know this existed in the c stdlib
+	//qsort(input->exprs, input->num_active_exprs, sizeof(*input->exprs), lexsort_expression_cmpfunc);
 
 	return 1;
 }
@@ -542,21 +601,20 @@ int main(int argc, char* argv[]) {
 		return 0;
 	}
 
-	srand(time(NULL));
+	printf("sgen-%s-perse. Written by Esa (2014).\n", sgen_version);
 
+	srand(time(NULL));
 	default_envelope = envelope_generate("default_envelope", 1.0, 0.1, 0.1, 5, 0.1, 2);
 
 	char *input_filename = argv[1];
 	input_t input = input_construct(input_filename);
 	
-	printf("sgen v. %s. Written by Esa (2014)\n", sgen_version);
 
 	if (input.error != 0) { 
 		SGEN_ERROR("(fatal) erroneous input! Exiting.\n");
 		return 1;
 	}
 
-	song_t s;
 	output_t o;
 
 	// defaults
@@ -565,10 +623,24 @@ int main(int argc, char* argv[]) {
 	o.channels = 2;
 	o.format = S16_FORMAT_LE_STEREO;
 
-	if (!construct_song_struct(&input, &s)) return 1;
+	sgen_timer_t t = timer_construct();
+	timer_begin(&t);
 
-	if (!song_synthesize(&o, &s)) return 1;
-	sgen_dump(&o);
+	sgen_ctx_t c;
+	memset(&c, 0x0, sizeof(c));
+
+	c.duration_s = 10;
+
+	char *time = timer_report(&t);
+	if (!construct_sgen_ctx(&input, &c)) return 1;
+
+	for (int i = 0; i < c.num_songs; ++i) {
+		song_synthesize(&o, &c.songs[i]);
+		sgen_dump(&o);
+	}
+
+	printf("sgen: took %s.\n", timer_report(&t));
+	free(time);
 
 	return 0;
 }

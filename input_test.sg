@@ -1,35 +1,52 @@
-tempo 30;
-duration 10;
+tempo 32;
+duration 20;
 
 #sample sample1("sound.wav");
 #sound sound1(sound=sample1);
 
 envelope envelope1(1.0, 0.1, 1, 50, 0.1, 2);
+envelope envelope2(1.0, 0.1, 1, 1, 0.3, 2);
 
 track track1(beatdiv=4, channel=left, loop=true, transpose=20) = {
 	1, <15 21 25>, <21 15 43>, 3, 5, 3, 0, 5
 };
 
-track track2(beatdiv=6, sound=triangle, channel=right, loop=true, active=1, transpose=20, envelope=random-per-note) = {
-	5, 3, 7, 9, 13, 10, 8
+track track2(beatdiv=16, sound=triangle, channel=right, loop=true, active=1, transpose=20, envelope=random-per-note) = {
+	4, 7, 9, 12, 0, 9, 7, 4, 0
+	4, 0, 7, 9, 0, 0, 12, 9, 7, 4
 };
 
-track track3(beatdiv=3, sound=square, channel=l+r, loop=true, transpose=21) = {
+track track5(beatdiv=16, sound=sine, channel=left, loop=true, active=1, transpose=20, envelope=random-per-note) = {
+	4, 0, 7, 9, 12
+};
+
+
+track track3(beatdiv=4, sound=square, channel=l+r, loop=true, transpose=21) = {
 	<1 8 17>, <8 9 13>, <5 7 11 15>,
-	<3 8 19>, <10 9 15>, <7 10 16 20>,
-	<5 8 21>, <12 9 17>, <9 13 21 25>,
-	<7 8 23>, <14 9 19>, <11 16 26 30>
+	<3 12 19>, <10 14 15>, <7 12 16 20>,
+	<5 18 22>, <12 19 17>, <9 15 21 25>,
+	<7 17 23>, <14 24 19>, <11 16 26 30>
 };
 
-track track4(beatdiv=5, sound=triangle, channel=l+r, loop=true, active=1, transpose=22) {
+track track4(beatdiv=16, sound=triangle, channel=l+r, loop=true, active=1, transpose=22) {
 	<30 34 37 40>,
-	<27 31 34 37>,
+		0,
 	<24 28 31 34>,
-	<21 25 28 31>,
+		0,
 	<18 22 25 28>,
 	<15 19 22 25>,
-	<12 16 19 22>
+	0,
+	<13 17 20 23>,
+	<14 18 21 24>,
+	0,
+	<16 20 23 26>,
+	<17 21 24 27>,
+	<18 22 25 28>,
+	0,
+	<20 24 27 30>,
+	<21 25 28 31>,
+	<22 26 29 32>,
+	<23 27 30 33>
 };
 
-song = { track1, track2, track3, track4 };
-#song = { track1 };
+song song1() { track1, track2, track3, track4, track5 };

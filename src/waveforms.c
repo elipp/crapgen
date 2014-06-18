@@ -30,7 +30,6 @@ float waveform_triangle(float freq, float t, float phi) {
 	float p = (TWO_PI*freq*t + phi)/TWO_PI;
 	float phase = p - floor(p);
 	return phase < 0.5 ? (-4*phase + 1) : (4*phase - 3);
-	
 }
 
 float waveform_sawtooth(float freq, float t, float phi) {
@@ -40,55 +39,30 @@ float waveform_sawtooth(float freq, float t, float phi) {
 	return (-2*phase + 1);
 }
 
+float waveform_noise(float freq, float t, float phi) {
+	return randomfloatminus1_1();
+}
+
 const sound_t sounds[] = {
 	{ "default", waveform_sine },
 	{ "sine", waveform_sine },
 	{ "square", waveform_square },
 	{ "triangle", waveform_triangle },
-	{ "sawtooth", waveform_sawtooth }
+	{ "sawtooth", waveform_sawtooth },
+	{ "noise", waveform_noise }
 };
 
 const size_t num_sounds = sizeof(sounds)/sizeof(sounds[0]);
 
-static float *freq_from_noteindex(note_t* note, float transpose) {
-	static const float twelve_equal_coeff = 1.05946309436; // 2^(1/12)
+int freq_from_noteindex(note_t* note, float transpose, float eqtemp_coef, float *freqarr) {
+
 	static const float low_c = 32.7032;
-	float *pitches = malloc(note->num_values*sizeof(float));
+
+	
 	for (int i = 0; i < note->num_values; ++i) {
-		pitches[i] = low_c * pow(twelve_equal_coeff, note->values[i] + transpose);
+		freqarr[i] = low_c * pow(eqtemp_coef, note->values[i] + transpose);
 	}
 
-	return pitches;
+	return 1;
 }
 
-
-float *note_synthesize(note_t *note, PFNWAVEFORM wform) {
-// TODO: replace hard-coded values with output_t struct values!
-	float samplerate = 44100;
-	long num_samples = note->duration_s*samplerate;
-
-	float *samples = malloc(num_samples*sizeof(float)); 
-	memset(samples, 0x0, num_samples*sizeof(float));
-
-	float dt = 1.0/samplerate;
-	float A = 1.0/note->num_values;
-
-	float *freqs = freq_from_noteindex(note, note->transpose);
-
-	for (int i = 0; i < note->num_values; ++i) {
-		float f = freqs[i];
-//		fprintf(stderr, "freq: %f, i = %d\n", f, i);
-		long j = 0;
-		float t = 0;
-		for (; j < num_samples; ++j) {
-			float ea = envelope_get_amplitude_noprecalculate(j, num_samples, note->env);
-//			fprintf(stderr, "ea: %f\n", ea);
-			samples[j] += note->env->parms[ENV_AMPLITUDE]*A*ea*wform(f, t, 0);
-			t += dt;
-		}
-	}
-
-	free(freqs);
-
-	return samples;
-}

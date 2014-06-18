@@ -3,6 +3,12 @@
 #include <time.h>
 #include "types.h"
 
+
+static const float HALF_RAND_MAX = 0.5*(float)RAND_MAX;
+
+float randomfloat01() { return (float)rand()/(float)RAND_MAX; }
+float randomfloatminus1_1() { return (float)rand()/HALF_RAND_MAX - 1.0; }
+
 envelope_t default_envelope;
 
 envelope_t envelope_generate(char* name, float amplitude, float a, float d, float s, float sl, float r) {
@@ -85,7 +91,6 @@ float envelope_get_amplitude_noprecalculate(int snum, int num_samples, envelope_
 
 }	
 
-static inline float randomfloat01() { return (float)rand()/(float)RAND_MAX; }
 
 envelope_t random_envelope() {
 	envelope_t e = 

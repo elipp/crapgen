@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <math.h>
 
 #include "track.h"
 #include "utils.h"
@@ -16,7 +17,7 @@ static int boolean_str_true(const char* str) {
 	}
 }
 
-static int track_beatdiv_action(const char* val, track_t* t, song_t* s) {
+static int track_beatdiv_action(const char* val, track_t* t, sgen_ctx_t *c) {
 	double d = 1;
 	convert_string_to_double(val, &d);
 	t->notes_per_beat = d;
@@ -24,7 +25,7 @@ static int track_beatdiv_action(const char* val, track_t* t, song_t* s) {
 	return 1;
 }
 
-static int track_channel_action(const char* val, track_t* t, song_t* s) {
+static int track_channel_action(const char* val, track_t* t, sgen_ctx_t *c) {
 	if (strcmp(val, "left") == 0 || strcmp(val, "l") == 0) {
 		t->channel |= 0x1;
 	}
@@ -40,7 +41,7 @@ static int track_channel_action(const char* val, track_t* t, song_t* s) {
 	return 1;
 }
 
-static int track_sound_action(const char* val, track_t* t, song_t* s) {
+static int track_sound_action(const char* val, track_t* t, sgen_ctx_t *c) {
 	int found = 0;
 	for (int i = 0; i < num_sounds; ++i) {
 		if (strcmp(val, sounds[i].name) == 0) {
@@ -57,34 +58,34 @@ static int track_sound_action(const char* val, track_t* t, song_t* s) {
 	return 1;
 }
 
-static int track_reverse_action(const char* val, track_t* t, song_t* s) {
+static int track_reverse_action(const char* val, track_t* t, sgen_ctx_t *c) {
 	if (boolean_str_true(val)) t->reverse = 1;
 	return 1;
 }
 
-static int track_inverse_action(const char* val, track_t* t, song_t* s) {
+static int track_inverse_action(const char* val, track_t* t, sgen_ctx_t *c) {
 	if (boolean_str_true(val)) t->inverse = 1;
 	return 1;
 }
 
-static int track_equal_temperament_steps_action(const char* val, track_t* t, song_t* s) {
+static int track_equal_temperament_steps_action(const char* val, track_t* t, sgen_ctx_t *c) {
 	double d = 1;
 	convert_string_to_double(val, &d);
-	t->equal_temperament_steps = d;
+	t->eqtemp_coef = pow(2, 1.0/d);
 	return 1;
 }
 
-static int track_loop_action(const char* val, track_t* t, song_t* s) {
+static int track_loop_action(const char* val, track_t* t, sgen_ctx_t *c) {
 	if (boolean_str_true(val)) t->loop = 1;
 	return 1;
 }
 
-static int track_active_action(const char* val, track_t* t, song_t* s) {
+static int track_active_action(const char* val, track_t* t, sgen_ctx_t *c) {
 	if (!boolean_str_true(val)) t->active = 0;
 	return 1;
 }
 
-static int track_transpose_action(const char* val, track_t* t, song_t* s) {
+static int track_transpose_action(const char* val, track_t* t, sgen_ctx_t *c) {
 	double d = 1;
 	convert_string_to_double(val, &d);
 	t->transpose = d;
@@ -92,7 +93,7 @@ static int track_transpose_action(const char* val, track_t* t, song_t* s) {
 	return 1;
 }
 
-static int track_delay_action(const char* val, track_t* t, song_t* s) {
+static int track_delay_action(const char* val, track_t* t, sgen_ctx_t *c) {
 	double d = 1;
 	convert_string_to_double(val, &d);
 	t->delay = d;
@@ -100,7 +101,7 @@ static int track_delay_action(const char* val, track_t* t, song_t* s) {
 	return 1;
 }
 
-static int track_envelope_action(const char* val, track_t* t, song_t* s) {
+static int track_envelope_action(const char* val, track_t* t, sgen_ctx_t *c) {
 	// TODO: NOTE! CUSTOM ENVELOPES ARE NOT NECESSARILY CONSTRUCTED AT THIS STAGE. 
 	// "envelope" HAPPENS TO BE LEXICALLY PRECEDE "track", and qsort takes care of this. Fix that kk?
 	// also, replace song_t with sgen_ctx_t
@@ -118,9 +119,9 @@ static int track_envelope_action(const char* val, track_t* t, song_t* s) {
 	}
 
 	int found = 0;
-	for (int i = 0; i < s->num_envelopes; ++i) {
-		if (strcmp(val, s->envelopes[i].name) == 0) {
-			t->envelope = &s->envelopes[i];
+	for (int i = 0; i < c->num_envelopes; ++i) {
+		if (strcmp(val, c->envelopes[i].name) == 0) {
+			t->envelope = &c->envelopes[i];
 			found = 1;
 			printf("found envelope \"%s\" from list\n", val);
 			break;
@@ -133,7 +134,7 @@ static int track_envelope_action(const char* val, track_t* t, song_t* s) {
 	else return 1;
 }
 	
-static int track_unknown_action(const char* val, track_t *t, song_t *s) {
+static int track_unknown_action(const char* val, track_t *t, sgen_ctx_t *c) {
 	SGEN_WARNING("unknown prop with value \"%s\", ignoring.\n", val); // TODO: somehow propagate the unknown string to this
 	return 1;
 }
