@@ -102,9 +102,6 @@ static int track_delay_action(const char* val, track_t* t, sgen_ctx_t *c) {
 }
 
 static int track_envelope_action(const char* val, track_t* t, sgen_ctx_t *c) {
-	// TODO: NOTE! CUSTOM ENVELOPES ARE NOT NECESSARILY CONSTRUCTED AT THIS STAGE. 
-	// "envelope" HAPPENS TO BE LEXICALLY PRECEDE "track", and qsort takes care of this. Fix that kk?
-	// also, replace song_t with sgen_ctx_t
 
 	if (strcmp(val, "random-per-note") == 0) {
 		t->envelope_mode = ENV_RANDOM_PER_NOTE;
@@ -134,6 +131,26 @@ static int track_envelope_action(const char* val, track_t* t, sgen_ctx_t *c) {
 	else return 1;
 }
 	
+static int track_vibrato_action(const char* val, track_t *t, sgen_ctx_t *c) {
+
+	int found = 0;
+	fprintf(stderr, "%s, %d\n", val, c->num_vibratoes);
+	for (int i = 0; i < c->num_vibratoes; ++i) {
+		if (strcmp(val, c->vibratoes[i].name) == 0) {
+			t->vibrato = &c->vibratoes[i];
+			found = 1;
+			printf("found vibrato \"%s\" from list\n", val);
+			break;
+		}
+	}
+	if (!found) {
+		SGEN_WARNING("use of undefined vibrato id \"%s\", defaulting to \"default\".\n", val);
+		return 0;
+	}
+	else return 1;
+
+}
+
 static int track_unknown_action(const char* val, track_t *t, sgen_ctx_t *c) {
 	SGEN_WARNING("unknown prop with value \"%s\", ignoring.\n", val); // TODO: somehow propagate the unknown string to this
 	return 1;
@@ -152,6 +169,7 @@ const track_prop_action_t track_prop_actions[] = {
 	{ "transpose", { "<numeric>", NULL }, 1, track_transpose_action },
 	{ "delay", { "<numeric>", NULL }, 1, track_delay_action },
 	{ "envelope", { "<primitive-id>", "random-per-track", "random-per-note", NULL }, 3, track_envelope_action },
+	{ "vibrato", { "<primitive-id>", NULL }, 1, track_vibrato_action },
 	{ "unknown", { NULL }, 0, track_unknown_action }
 };
 

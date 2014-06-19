@@ -1,4 +1,4 @@
-tempo 32;
+tempo 24;
 duration 20;
 
 #sample sample1("sound.wav");
@@ -6,6 +6,8 @@ duration 20;
 
 envelope envelope1(1.0, 0.1, 1, 50, 0.1, 2);
 envelope envelope2(1.0, 0.1, 1, 1, 0.3, 2);
+
+vibrato vibrato1(0.0020, 100);
 
 track track1(beatdiv=4, channel=left, loop=true, transpose=20) = {
 	1, <15 21 25>, <21 15 43>, 3, 5, 3, 0, 5
@@ -21,7 +23,7 @@ track track5(beatdiv=16, sound=sine, channel=left, loop=true, active=1, transpos
 };
 
 
-track track3(beatdiv=4, sound=square, channel=l+r, loop=true, transpose=21) = {
+track track3(beatdiv=4, sound=square, channel=l+r, loop=true, transpose=21, vibrato=vibrato1) = {
 	<1 8 17>, <8 9 13>, <5 7 11 15>,
 	<3 12 19>, <10 14 15>, <7 12 16 20>,
 	<5 18 22>, <12 19 17>, <9 15 21 25>,

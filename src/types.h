@@ -57,6 +57,12 @@ typedef struct input_t {
 struct articulation_t; //nyi
 struct filter_t; //nyi
 
+typedef struct vibrato_t {
+	char *name;
+	float width;
+	float freq;
+} vibrato_t;
+
 typedef struct note_t {
 	int *values;
 	long num_values;
@@ -85,6 +91,7 @@ typedef struct track_t {
 	sound_t sound;
 	envelope_t *envelope;
 	int envelope_mode;
+	vibrato_t *vibrato;
 
 } track_t;
 
@@ -153,6 +160,9 @@ typedef struct sgen_ctx_t {
 
 	envelope_t *envelopes;
 	int num_envelopes;
+
+	vibrato_t *vibratoes;
+	int num_vibratoes;
 
 	track_t *tracks;
 	int num_tracks;

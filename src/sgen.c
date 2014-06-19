@@ -21,6 +21,7 @@ static int read_track(expression_t *track_expr, track_t *t, sgen_ctx_t *c);
 static int read_song(expression_t *track_expr, song_t *s, sgen_ctx_t *c);
 
 static char *get_primitive_identifier(expression_t *prim_expr);
+static dynamic_wlist_t *get_primitive_args(expression_t *prim_expr);
 
 typedef int (*keywordfunc)(expression_t*, sgen_ctx_t*);
 
@@ -116,11 +117,8 @@ int envelope_action(expression_t *arg, sgen_ctx_t *c) {
 
 	// parse args
 
-	char *envelope_args;
-	if (find_stuff_between('(', ')', arg->statement, &envelope_args) <= 0) { return 0; }
-
-	dynamic_wlist_t *args = tokenize_wr_delim(envelope_args, ",");
-	sa_free(envelope_args);
+	dynamic_wlist_t *args = get_primitive_args(arg);
+	if (!args) return 0;
 
 	float parms[ENV_NUM_PARMS];
 	
@@ -148,6 +146,37 @@ int envelope_action(expression_t *arg, sgen_ctx_t *c) {
 	return 1; 
 }
 
+int vibrato_action(expression_t *arg, sgen_ctx_t *c) { 
+
+	vibrato_t v;
+
+	if (c->num_vibratoes == 0) { c->vibratoes = malloc(sizeof(vibrato_t)); }
+	++c->num_vibratoes;
+
+	c->vibratoes = realloc(c->vibratoes, c->num_vibratoes*sizeof(vibrato_t));
+
+	if ((v.name = get_primitive_identifier(arg)) == NULL) { return 0; }
+
+	dynamic_wlist_t *args = get_primitive_args(arg);
+	if (!args) return 0;
+
+	if (args->num_items != 2) {
+		SGEN_WARNING("invalid vibrato constructor: expected exactly 2 numeric arguments (breadth, freq)! Defaulting to (0.0008, 40).\n");
+		v.width = 0.0008;
+		v.freq = 40;
+	} else {
+		double d;
+		convert_string_to_double(args->items[0], &d);
+		v.width = d;
+		convert_string_to_double(args->items[1], &d);
+		v.freq = d;
+	}
+
+	c->vibratoes[c->num_vibratoes-1] = v;
+
+	return 1;
+}
+
 static const struct { 
 	const char* keyword; 
 	keywordfunc action; 
@@ -159,7 +188,10 @@ static const struct {
 { "tempo", tempo_action },
 { "duration", duration_action },
 { "samplerate", samplerate_action },
-{ "envelope", envelope_action } };
+{ "envelope", envelope_action },
+{ "vibrato", vibrato_action }
+
+};
 
 
 static char* get_primitive_identifier(expression_t *track_expr) {
@@ -175,6 +207,16 @@ static char* get_primitive_identifier(expression_t *track_expr) {
 	}
 }
 
+static dynamic_wlist_t *get_primitive_args(expression_t *prim_expr) {
+
+	char *argstr;
+	if (find_stuff_between('(', ')', prim_expr->statement, &argstr) <= 0) { return NULL; }
+	
+	dynamic_wlist_t *wr = tokenize_wr_delim(argstr, ",");
+	sa_free(argstr);
+
+	return wr;
+}
 
 static int read_track(expression_t *track_expr, track_t *t, sgen_ctx_t *c) {
 
@@ -190,13 +232,12 @@ static int read_track(expression_t *track_expr, track_t *t, sgen_ctx_t *c) {
 	t->sound = sounds[0];
 	t->envelope = &default_envelope;
 	t->envelope_mode = ENV_FIXED;
+	t->vibrato = NULL;
 
 	if ((t->name = get_primitive_identifier(track_expr)) == NULL) { return 0; }
 
-	char* track_args;
-	if (find_stuff_between('(', ')', track_expr->statement, &track_args) <= 0) { return 0; }
-
-	dynamic_wlist_t *args = tokenize_wr_delim(track_args, ",");
+	dynamic_wlist_t *args = get_primitive_args(track_expr);
+	if (!args) return 0;
 
 	for (int i = 0; i < args->num_items; ++i) {
 		
@@ -233,6 +274,8 @@ static int read_track(expression_t *track_expr, track_t *t, sgen_ctx_t *c) {
 		t->envelope = malloc(sizeof(envelope_t));
 		*t->envelope = random_envelope();
 	}
+
+	dynamic_wlist_destroy(args);
 	
 	char* track_contents;
 	if (!find_stuff_between('{', '}', track_expr->statement, &track_contents)) {
@@ -289,12 +332,9 @@ static int read_track(expression_t *track_expr, track_t *t, sgen_ctx_t *c) {
 		}
 
 		t->notes[index].transpose = t->transpose;
-//		fprintf(stderr, "note str: \"%s\", num_values = %ld\n", iter, t->notes[index].num_values);
 
 		++index;
 	}
-
-
 
 	printf("\n");
 
@@ -423,13 +463,9 @@ static int sgen_dump(output_t *output) {
 	size_t outbuf_size = total_num_samples*sizeof(short);
 	short *out_buffer = malloc(outbuf_size);
 
-	//float *lolz = do_fftw_stuff(b.buffer, total_num_samples);
-
 	for (long i = 0; i < total_num_samples; ++i) {
 		out_buffer[i] = (short)(0.5*SHORT_MAX*(b.buffer[i]));
-	//	out_buffer[i] = (short)(0.5*SHORT_MAX*(lolz[i]));
 	}
-	//free(lolz);
 
 	printf("sgen: dumping buffer of %ld samples to file %s.\n", b.num_samples_per_channel, outfname);
 
@@ -494,7 +530,8 @@ static int track_synthesize(track_t *t, long num_samples, float *lbuf, float *rb
 			float time = 0;
 			for (long j = 0; j < num_samples_per_note; ++j) {
 				float ea = envelope_get_amplitude_noprecalculate(j, num_samples_per_note, n->env);
-				n_samples[j] += n->env->parms[ENV_AMPLITUDE]*A*ea*t->sound.wform(freqs[i], time, 0);
+				float tv = t->vibrato ? t->vibrato->width * sin(t->vibrato->freq*time) : 0;
+				n_samples[j] += n->env->parms[ENV_AMPLITUDE]*A*ea*t->sound.wform(freqs[i], time + tv, 0);
 				time += dt;
 			}
 		}
