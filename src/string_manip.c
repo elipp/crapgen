@@ -76,4 +76,39 @@ char *tidy_string(const char* input) {
 
 }
 
+char *str_tolower(const char* input) {
+	if (!input) return NULL;
+	size_t ilen = strlen(input);
+	if (ilen < 1) return NULL;
 
+	char *out = malloc(ilen + 1);
+
+	int i = 0;
+	for (; i < ilen; ++i) {
+		out[i] = tolower(input[i]);
+	}
+	out[i] = '\0';
+	return out;
+
+}
+
+int str_all_digits(const char* input) {
+	if (!input) return -1;
+
+	size_t ilen = strlen(input);
+	if (ilen < 1) return -1;
+
+	int i = 0;
+	for (; i < ilen; ++i) {
+		if (!isdigit(input[i])) return 0;
+	}
+
+	return 1;
+}
+
+int str_to_int_b10(const char* input) {
+	char *end_ptr;
+	int r = (int)strtol(input, &end_ptr, 10);
+	// TODO add end_ptr check stuff
+	return r;
+}

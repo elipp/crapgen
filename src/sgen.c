@@ -25,6 +25,63 @@ static dynamic_wlist_t *get_primitive_args(expression_t *prim_expr);
 
 typedef int (*keywordfunc)(expression_t*, sgen_ctx_t*);
 
+static int map_notename_to_int(const char *notestr) {
+	
+	if (!notestr) return -1;
+	if (str_all_digits(notestr)) return str_to_int_b10(notestr); 
+
+//	size_t nlen = strlen(notestr);
+
+	char *note_lower = str_tolower(notestr);
+	if (!note_lower) return -1;
+
+	char *n = &note_lower[0];
+	if (*n == 'h') *n = 'b'; // convert h to b
+
+	if (*n < 'a' || *n > 'g') { 
+		SGEN_ERROR("Invalid notename %s\n", notestr);
+		return -1;
+	}	
+
+	int base = -1;
+
+	// trusting on the compiler's ability to optimize this shit :D
+	switch (*n) {
+		case 'c':
+			base = 0;
+			break;
+		case 'd':
+			base = 2;
+			break;
+		case 'e':
+			base = 4;
+			break;
+		case 'f':
+			base = 5;
+			break;
+		case 'g':
+			base = 7;
+			break;
+		case 'a':
+			base = 9;
+			break;
+		case 'b':
+			base = 11;
+			break;
+		default:
+			break;
+	}
+
+	if (strcmp(note_lower + 1, "is") == 0 || strcmp(note_lower + 1, "#") == 0) {
+		return base+1;
+	}
+	else if (strcmp(note_lower + 1, "es") == 0 || strcmp(note_lower + 1, "b") == 0) {
+		return base-1;
+	}
+	else return base;
+	
+}
+
 int song_action(expression_t *arg, sgen_ctx_t *c) { 
 
 	song_t s;
@@ -300,7 +357,6 @@ static int read_track(expression_t *track_expr, track_t *t, sgen_ctx_t *c) {
 		char *iter = notelist->items[i];
 		char *note_conts;
 		int ret = -1;
-		char *end_ptr;
 
 		if ((ret = find_stuff_between('<', '>', iter, &note_conts)) < 0) {
 			// syntax error
@@ -309,7 +365,7 @@ static int read_track(expression_t *track_expr, track_t *t, sgen_ctx_t *c) {
 		}
 		else if (ret == 0) {
 			t->notes[index].values = malloc(sizeof(int));
-			t->notes[index].values[0] = (int)strtol(iter, &end_ptr, 10);
+			t->notes[index].values[0] = map_notename_to_int(iter);// str_to_int_b10(iter);
 			t->notes[index].num_values = 1;
 			t->notes[index].duration_s = t->note_dur_s;
 			
@@ -317,7 +373,7 @@ static int read_track(expression_t *track_expr, track_t *t, sgen_ctx_t *c) {
 			dynamic_wlist_t *notes = tokenize_wr_delim(note_conts, " \t");
 			t->notes[index].values = malloc(notes->num_items*sizeof(int));
 			for (int i = 0; i < notes->num_items; ++i) {
-				t->notes[index].values[i] = (int)strtol(notes->items[i], &end_ptr, 10);
+				t->notes[index].values[i] = map_notename_to_int(notes->items[i]);//str_to_int_b10(notes->items[i]);
 			}
 			t->notes[index].num_values = notes->num_items;
 			t->notes[index].duration_s = t->note_dur_s;
@@ -348,7 +404,7 @@ int construct_sgen_ctx(input_t *input, sgen_ctx_t *c) {
 		expression_t *expriter = &input->exprs[i];
 
 		char *w = expriter->wlist->items[0];
-		if (w[0] == '#') continue; // ignore comments
+		if (w[0] == '/' && w[1] == '/') continue; // ignore comments
 
 		int unknown = 1;
 		for (int i = 0; i < sizeof(keyword_action_pairs)/sizeof(keyword_action_pairs[0]); ++i) {
@@ -359,7 +415,7 @@ int construct_sgen_ctx(input_t *input, sgen_ctx_t *c) {
 			}
 		}
 		if (unknown) {
-			printf("sgen: warning: unknown keyword \"%s\"!\n", w);
+			printf("sgen: warning: unknown keyword \"%s\"!\n", w); // fix weird error
 		}
 
 	}
