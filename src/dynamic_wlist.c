@@ -113,7 +113,7 @@ dynamic_wlist_t *tokenize_wr_delim_tidy(const char* input, const char* delim) {
 		dynamic_wlist_append(wl, tidy_string(exprbuf));
 	}
 
-	fprintf(stderr, "exprbuf = NULL! tokens gathered: %d\n", (int)wl->num_items);
+	fprintf(stderr, "[info]: tokenize_wr_delim_tidy: tokens gathered: %d\n", (int)wl->num_items);
 
 	sa_free(buf);
 

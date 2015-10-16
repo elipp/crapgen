@@ -81,7 +81,7 @@ char *str_tolower(const char* input) {
 	size_t ilen = strlen(input);
 	if (ilen < 1) return NULL;
 
-	char *out = malloc(ilen + 1);
+	char *out = sa_alloc(ilen + 1);
 
 	int i = 0;
 	for (; i < ilen; ++i) {

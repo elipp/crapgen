@@ -57,9 +57,9 @@ const size_t num_sounds = sizeof(sounds)/sizeof(sounds[0]);
 int freq_from_noteindex(note_t* note, float transpose, float eqtemp_coef, float *freqarr) {
 
 	static const float low_c = 32.7032;
-
 	
 	for (int i = 0; i < note->num_values; ++i) {
+	//	printf("freq_from_noteindex, index = %d\n", note->values[i]);
 		freqarr[i] = low_c * pow(eqtemp_coef, note->values[i] + transpose);
 	}
 

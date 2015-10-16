@@ -39,13 +39,13 @@ static int map_notename_to_int(const char *notestr) {
 	if (*n == 'h') *n = 'b'; // convert h to b
 
 	if (*n < 'a' || *n > 'g') { 
-		SGEN_ERROR("Invalid notename %s\n", notestr);
+		SGEN_ERROR("map_notename_to_int: invalid notename: \"%s\"\n", notestr);
 		return -1;
 	}	
 
 	int base = -1;
 
-	// trusting on the compiler's ability to optimize this shit :D
+	// trusting on the compiler's ability to optimize this shit, will probably compile into a cute jump table :D
 	switch (*n) {
 		case 'c':
 			base = 0;
@@ -72,13 +72,17 @@ static int map_notename_to_int(const char *notestr) {
 			break;
 	}
 
+	int rval = 0;
+
 	if (strcmp(note_lower + 1, "is") == 0 || strcmp(note_lower + 1, "#") == 0) {
-		return base+1;
+		rval = base+1;
 	}
 	else if (strcmp(note_lower + 1, "es") == 0 || strcmp(note_lower + 1, "b") == 0) {
-		return base-1;
+		rval = base-1;
 	}
-	else return base;
+	else rval = base;
+
+	return rval;
 	
 }
 
@@ -93,7 +97,7 @@ int song_action(expression_t *arg, sgen_ctx_t *c) {
 
 	if (!read_song(arg, &s, c)) return 0;
 
-	printf("found song block with tracks: ");
+	printf("sgen: found song block \"%s\" with tracks: ", s.name);
 	dynamic_wlist_print(s.active_track_ids);
 
 	c->songs[c->num_songs-1] = s;
@@ -275,6 +279,142 @@ static dynamic_wlist_t *get_primitive_args(expression_t *prim_expr) {
 	return wr;
 }
 
+static void dump_note_t(note_t *n) {
+	fprintf(stderr, "note: num_values = %d\n", n->num_values);
+	if (n->num_values == 1) {
+		fprintf(stderr, "(single) note value: %d\n", n->values[0]);
+		return;
+	}	
+	for (int i = 0; i < n->num_values; ++i) {
+		fprintf(stderr, "(chord) value %d/%d: %d\n", i+1, n->num_values, n->values[i]);
+		//printf("(chord) value %d/%d: \n", i, n->num_values);
+	}
+//	fprintf(stderr,"chord: num_values = %d\n", n->num_values);
+//	getchar();
+	
+}
+
+
+
+note_t *convert_notestr_wlist_to_notelist(dynamic_wlist_t *notestr_wlist, size_t *num_notes) {
+	// this is kinda wasteful, since there could be < > chords, but not too bad.
+	// might want to realloc shrink once we're done with the parsing
+	note_t *notes = malloc(notestr_wlist->num_items * sizeof(note_t));
+
+	int err = 0;
+
+	int i = 0;
+	int n = 0;
+
+	char **cur_note = notestr_wlist->items;
+	char **last_note = notestr_wlist->items + notestr_wlist->num_items;
+
+	while (cur_note < last_note) {
+		fprintf(stderr, "n = %d\n", n);
+		if (err) { break; }
+		if (!cur_note || !*cur_note) {
+			SGEN_WARNING("NULL notestr encountered!\n");
+			err = 1;
+			continue;
+		} 
+		char *loc;
+		if ((loc = strchr(*cur_note, '<')) != NULL) {
+			if (loc != *cur_note) {  // if '<' not first char of the notestr
+				SGEN_ERROR("syntax error: (chord): unexpected char input before \'<\'!");
+			}
+			char **chord_beg = cur_note;
+			char **chord_end = NULL;
+
+			++cur_note; 
+
+			// find note ending with '>'
+			while (cur_note <= last_note) {
+				if ((loc = strchr(*cur_note, '<')) != NULL) {
+					SGEN_ERROR("syntax error: (chord): found \'<\' inside \'<\' (chord nesting is not supported!\n");
+				}
+
+				if ((loc = strchr(*cur_note, '>')) != NULL) {
+				// check if '>' is actually the last character (which it should be)
+					if ((loc-(*cur_note)) != (strlen(*cur_note)) - 1) { 
+						SGEN_ERROR("syntax error: (chord): unexpected input after \'>\'!\n");
+						err = 1;
+						break;
+					}
+					else  {
+						//fprintf(stderr, "debug: found suitable end note: \"%s\"\n", *cur_note);
+						chord_end = cur_note;
+						break;
+						
+					}
+				}
+
+				++cur_note;
+			}
+			if (cur_note == NULL) {
+				SGEN_ERROR("syntax error: no corresponding \'>\' encountered!\n");
+				err = 1;
+			}
+			// construct actual note
+				
+			int num_notes = (chord_end - chord_beg) + 1;
+
+			notes[n].values = malloc(num_notes*sizeof(int));
+			fprintf(stderr, "debug: mallocing for %d values\n", num_notes);
+			notes[n].num_values = num_notes;
+
+			// exclude the beginning '<' from the first notename
+			notes[n].values[0] = map_notename_to_int(*chord_beg + 1);
+
+			int j = 1;
+			while (j < num_notes - 1) {
+				notes[n].values[j] = map_notename_to_int(*(chord_beg + j));
+				++j;
+			}
+			// CONSIDER: just removing the original '>' in-place, the note strings are useless after this stage anyway
+			size_t last_len = strlen(*chord_end);
+			char *last_dup_clean = strdup(*chord_end);
+			last_dup_clean[last_len-1] = '\0'; // remove the terminating '>' 
+
+			notes[n].values[j] = map_notename_to_int(last_dup_clean);
+
+			free(last_dup_clean);
+
+		}
+		else {
+
+		// no chord, just map_notename_to_str
+			notes[n].values = malloc(sizeof(int));
+			notes[n].num_values = 1;
+			notes[n].values[0] = map_notename_to_int(*cur_note);
+//			fprintf(stderr, "debug: (single) note value: %d\n", notes[num_note].values[0]);
+		}
+
+		dump_note_t(&notes[n]);
+		printf("%s\n", *cur_note);
+
+		++n;
+		++cur_note;
+	}
+
+	if (err) {
+		// TODO: really cleanup (free alloc'd notes[i].values), or just bail
+		free(notes);
+		notes = NULL;
+	}
+
+	*num_notes = n;
+	
+	printf("track: num_notes = %d\n", *num_notes);
+
+		
+	return notes;
+
+	// TODO: shrink array, probably is too big because of chords :P
+
+
+
+}
+
 static int read_track(expression_t *track_expr, track_t *t, sgen_ctx_t *c) {
 
 	// default vals. TODO: replace this with something cuter
@@ -339,28 +479,39 @@ static int read_track(expression_t *track_expr, track_t *t, sgen_ctx_t *c) {
 		return 0;
 	}
 
-	dynamic_wlist_t *notelist_dirty = tokenize_wr_delim(track_contents, ",");
-
-	dynamic_wlist_t *notelist = dynamic_wlist_tidy(notelist_dirty);
-	dynamic_wlist_destroy(notelist_dirty);
+	dynamic_wlist_t *notelist = tokenize_wr_delim(track_contents, "\t\n ");
 
 	t->notes = malloc(notelist->num_items * sizeof(note_t));
 	t->num_notes = notelist->num_items;
-	long index = 0;
 
 	t->note_dur_s = (1.0/(t->notes_per_beat*(c->tempo_bpm/60.0)));
 	t->duration_s = t->num_notes * t->note_dur_s;
-	printf("t->note_dur_s: %f, t->duration_s = %f\n", t->note_dur_s, t->duration_s);
+	printf("debug: t->num_notes = %d, t->note_dur_s: %f, t->duration_s = %f\n", t->num_notes, t->note_dur_s, t->duration_s);
 
+	t->notes = convert_notestr_wlist_to_notelist(notelist, &t->num_notes);
 
-	for (int i = 0; i < notelist->num_items; ++i) {
+	if (!t->notes || t->num_notes < 1) return 0;
+
+	for (int i = 0; i < t->num_notes; ++i) {
+//		dump_note_t(&t->notes[i]);
+		if (t->envelope_mode == ENV_RANDOM_PER_NOTE) {
+			t->notes[i].env = malloc(sizeof(envelope_t));
+			*t->notes[i].env = random_envelope();
+		} else {
+			t->notes[i].env = t->envelope;
+		}
+
+		t->notes[i].transpose = t->transpose;
+	}
+
+/*	for (int i = 0; i < notelist->num_items; ++i) {
 		char *iter = notelist->items[i];
 		char *note_conts;
 		int ret = -1;
 
 		if ((ret = find_stuff_between('<', '>', iter, &note_conts)) < 0) {
 			// syntax error
-			SGEN_ERROR("track %s: syntax error in note \"%s\"!", t->name, note_conts);
+			SGEN_ERROR("track %s: syntax error in note \"%s\"!\n", t->name, note_conts);
 			return 0;
 		}
 		else if (ret == 0) {
@@ -380,17 +531,10 @@ static int read_track(expression_t *track_expr, track_t *t, sgen_ctx_t *c) {
 			dynamic_wlist_destroy(notes);
 		}
 		
-		if (t->envelope_mode == ENV_RANDOM_PER_NOTE) {
-			t->notes[index].env = malloc(sizeof(envelope_t));
-			*t->notes[index].env = random_envelope();
-		} else {
-			t->notes[index].env = t->envelope;
-		}
-
-		t->notes[index].transpose = t->transpose;
 
 		++index;
 	}
+	*/
 
 	printf("\n");
 
@@ -415,7 +559,8 @@ int construct_sgen_ctx(input_t *input, sgen_ctx_t *c) {
 			}
 		}
 		if (unknown) {
-			printf("sgen: warning: unknown keyword \"%s\"!\n", w); // fix weird error
+			SGEN_ERROR("sgen: error: unknown keyword \"%s\"!\n", w); // fix weird error
+			return 0;
 		}
 
 	}
@@ -582,6 +727,7 @@ static int track_synthesize(track_t *t, long num_samples, float *lbuf, float *rb
 			goto increment;
 		}
 
+
 		for (int i = 0; i < n->num_values; ++i) {
 			float time = 0;
 			for (long j = 0; j < num_samples_per_note; ++j) {
@@ -622,6 +768,8 @@ increment:
 
 	free(n_samples);
 
+	printf("track_synthesize: done.\n\n");
+
 	return 1;
 }
 
@@ -635,6 +783,7 @@ static int song_synthesize(output_t *o, song_t *s) {
 	memset(lbuf, 0x0, num_samples_per_channel*sizeof(float));
 	memset(rbuf, 0x0, num_samples_per_channel*sizeof(float));
 
+	printf("sgen: song_synthesize: num_tracks = %d\n", s->num_tracks);
 	printf("sgen: song_synthesize: num_samples_per_channel = %ld\n", num_samples_per_channel);
 
 	for (int i = 0; i < s->num_tracks; ++i) {
@@ -652,6 +801,8 @@ static int song_synthesize(output_t *o, song_t *s) {
 
 	long num_samples_merged = 2*num_samples_per_channel;
 	float *merged = malloc(num_samples_merged*sizeof(float));
+
+	// interleave l and r buffers XD
 
 	for (long i = 0; i < num_samples_per_channel; ++i) {
 		merged[2*i] = lbuf[i];
@@ -732,7 +883,7 @@ int main(int argc, char* argv[]) {
 		return 0;
 	}
 
-	printf("sgen-%s-perse. Written by Esa (2014).\n", sgen_version);
+	fprintf(stderr, "sgen-%s-perse. Written by Esa (2014).\n", sgen_version);
 
 	srand(time(NULL));
 	default_envelope = envelope_generate("default_envelope", 1.0, 0.1, 0.1, 5, 0.1, 2);
@@ -740,7 +891,6 @@ int main(int argc, char* argv[]) {
 	char *input_filename = argv[1];
 	input_t input = input_construct(input_filename);
 	
-
 	if (input.error != 0) { 
 		SGEN_ERROR("(fatal) erroneous input! Exiting.\n");
 		return 1;

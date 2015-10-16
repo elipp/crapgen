@@ -66,7 +66,7 @@ int find_stuff_between(char beg, char end, char* input, char** output) {
 	}
 
 	if (error) {
-		SGEN_ERROR("erroneous input:\"\n%s\n\", delims = %c, %c. error code %x\n", input, beg, end, error);
+		SGEN_ERROR("erroneous input:\n\"%s\",\ndelims = %c, %c. error code %x\n", input, beg, end, error);
 		error *= -1;
 		find_stuff_between_errmsg(beg, end, error);
 		return error;

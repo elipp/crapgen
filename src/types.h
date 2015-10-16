@@ -3,7 +3,7 @@
 
 #include <stdlib.h>
 
-typedef struct sgen_ctx_t sgen_ctx_t;
+struct sgen_ctx_t;
 
 typedef struct {
 	char **items;
@@ -67,6 +67,7 @@ typedef struct note_t {
 	int *values;
 	long num_values;
 	int transpose;
+	float value; // relative duration. 1 for whole note, 2 for half note etc. (ex. a_4)
 	float duration_s;
 	envelope_t *env;
 } note_t;
@@ -75,7 +76,7 @@ typedef struct track_t {
 	char* name;
 
 	note_t *notes;
-	int num_notes;
+	size_t num_notes;
 	
 	int loop;
 	int active;
@@ -95,14 +96,15 @@ typedef struct track_t {
 
 } track_t;
 
-typedef int (*PFNTRACKPROPACTION)(const char* val, track_t*, sgen_ctx_t*);
+typedef int (*PFNTRACKPROPACTION)(const char* val, track_t*, struct sgen_ctx_t*);
 
 enum SGEN_FORMATS {
 	S16_FORMAT_LE_MONO = 0,
 	S16_FORMAT_LE_STEREO = 1
 };
 
-// https://ccrma.stanford.edu/courses/422/projects/WaveFormat/
+// ref: https://ccrma.stanford.edu/courses/422/projects/WaveFormat/
+
 typedef struct WAV_hdr_t {
 	int ChunkID_BE;
 	int ChunkSize_LE;
