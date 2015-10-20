@@ -63,9 +63,12 @@ typedef struct vibrato_t {
 	float freq;
 } vibrato_t;
 
+struct note_t;
+
 typedef struct note_t {
-	int *values;
-	long num_values;
+	struct note_t *children; // NULL for top level notes
+	int num_children;
+	int pitch;
 	int transpose;
 	float value; // relative duration. 1 for whole note, 2 for half note etc. (ex. a_4)
 	float duration_s;
@@ -86,7 +89,7 @@ typedef struct track_t {
 	int reverse;
 	float delay;
 	float notes_per_beat;
-	float eqtemp_coef;
+	float eqtemp_steps;
 	float duration_s;
 	float note_dur_s;
 	sound_t sound;

@@ -5,6 +5,28 @@
 #include "string_manip.h"
 #include "utils.h"
 
+
+int convert_string_to_float(const char* str, float *out) {
+
+	char *endptr;
+	*out = strtof(str, &endptr);		
+
+	if (endptr == str) { 
+		SGEN_WARNING("strtof: no conversion performed! (input string: \"%s\")\n", str);
+		*out = 0;
+		return -1; 	
+	}
+
+	if (endptr && *endptr != '\0') {
+		SGEN_WARNING("strtof: full double conversion of string \"%s\" couldn't be performed\n", str);
+		return 0;
+	}
+	
+	return 1;
+}
+
+
+
 int convert_string_to_double(const char* str, double *out) {
 
 	char *endptr;

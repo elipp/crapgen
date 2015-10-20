@@ -12,6 +12,7 @@
 	printf("sgen: %s: warning: " fmt, __func__, ## __VA_ARGS__);\
 	} while (0)
 
+int convert_string_to_float(const char* str, float *out);
 int convert_string_to_double(const char* str, double *out);
 int find_stuff_between(char beg, char end, char* input, char** output);
 long get_filesize(FILE *fp);

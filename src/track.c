@@ -68,13 +68,6 @@ static int track_inverse_action(const char* val, track_t* t, sgen_ctx_t *c) {
 	return 1;
 }
 
-static int track_equal_temperament_steps_action(const char* val, track_t* t, sgen_ctx_t *c) {
-	double d = 1;
-	convert_string_to_double(val, &d);
-	t->eqtemp_coef = pow(2, 1.0/d);
-	return 1;
-}
-
 static int track_loop_action(const char* val, track_t* t, sgen_ctx_t *c) {
 	if (boolean_str_true(val)) t->loop = 1;
 	return 1;
@@ -151,6 +144,15 @@ static int track_vibrato_action(const char* val, track_t *t, sgen_ctx_t *c) {
 
 }
 
+static int track_eqtemp_steps_action(const char* val, track_t *t, sgen_ctx_t *c) {
+	double d = 12;
+	convert_string_to_double(val, &d);
+
+	t->eqtemp_steps = d;
+	return 1;
+
+}
+
 static int track_unknown_action(const char* val, track_t *t, sgen_ctx_t *c) {
 	SGEN_WARNING("unknown prop with value \"%s\", ignoring.\n", val); // TODO: somehow propagate the unknown string to this
 	return 1;
@@ -163,13 +165,13 @@ const track_prop_action_t track_prop_actions[] = {
 	{ "sound", { "<primitive-id>", "sample-from-file", NULL }, 2, track_sound_action },
 	{ "reverse", { "<boolean>", NULL }, 1, track_reverse_action },
 	{ "inverse", { "<boolean>", NULL }, 1, track_inverse_action },
-	{ "equal_temperament_steps", { "<numeric>", NULL }, 1, track_equal_temperament_steps_action },
 	{ "loop", { "<boolean>", NULL }, 1, track_loop_action },
 	{ "active", { "<boolean>", NULL }, 1, track_active_action },
 	{ "transpose", { "<numeric>", NULL }, 1, track_transpose_action },
 	{ "delay", { "<numeric>", NULL }, 1, track_delay_action },
 	{ "envelope", { "<primitive-id>", "random-per-track", "random-per-note", NULL }, 3, track_envelope_action },
 	{ "vibrato", { "<primitive-id>", NULL }, 1, track_vibrato_action },
+	{ "eqtemp_steps", { "<numeric>", NULL }, 1, track_eqtemp_steps_action },
 	{ "unknown", { NULL }, 0, track_unknown_action }
 };
 
