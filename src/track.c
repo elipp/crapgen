@@ -17,14 +17,6 @@ static int boolean_str_true(const char* str) {
 	}
 }
 
-static int track_beatdiv_action(const char* val, track_t* t, sgen_ctx_t *c) {
-	double d = 1;
-	convert_string_to_double(val, &d);
-	t->notes_per_beat = d;
-
-	return 1;
-}
-
 static int track_channel_action(const char* val, track_t* t, sgen_ctx_t *c) {
 	if (strcmp(val, "left") == 0 || strcmp(val, "l") == 0) {
 		t->channel |= 0x1;
@@ -160,7 +152,6 @@ static int track_unknown_action(const char* val, track_t *t, sgen_ctx_t *c) {
 
 
 const track_prop_action_t track_prop_actions[] = {
-	{ "beatdiv", { "<numeric>", NULL }, 1, track_beatdiv_action },
 	{ "channel", { "left", "l", "right", "r", "l+r", "both", "stereo", NULL }, 7, track_channel_action },
 	{ "sound", { "<primitive-id>", "sample-from-file", NULL }, 2, track_sound_action },
 	{ "reverse", { "<boolean>", NULL }, 1, track_reverse_action },

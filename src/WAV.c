@@ -56,15 +56,16 @@ WAV_hdr_t generate_WAV_header(output_t *o) {
 	return hdr;
 }
 
-sgen_float32_buffer_t read_WAV(const char* filename) { 
+sgen_float32_buffer_t *read_WAV(const char* filename) { 
 
-	sgen_float32_buffer_t b;
 
 	FILE *fp = fopen(filename, "r");
 	if (!fp) { 
 		SGEN_ERROR("couldn't open file \"%s\": \n", strerror(errno));
-		return b; 
+		return NULL; 
 	}
+
+	sgen_float32_buffer_t *b = malloc(sizeof(sgen_float32_buffer_t));
 
 	size_t sz = get_filesize(fp);
 	WAV_hdr_t wh;
@@ -77,11 +78,11 @@ sgen_float32_buffer_t read_WAV(const char* filename) {
 
 	size_t num_samples = sz/sizeof(unsigned short);
 
-	b.buffer = malloc(sz);
-	b.num_samples_per_channel = num_samples/2;
+	b->buffer = malloc(sz);
+	b->num_samples_per_channel = num_samples/2;
 
 	for (int i = 0; i < num_samples; ++i) {
-		b.buffer[i] = (float)buf[i]/SHORT_MAX;
+		b->buffer[i] = (float)buf[i]/SHORT_MAX;
 	}
 
 	free(buf);

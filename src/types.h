@@ -88,10 +88,9 @@ typedef struct track_t {
 	int inverse;
 	int reverse;
 	float delay;
-	float notes_per_beat;
+	float bpm; // beats per minute, quarter notes (crotchets)
 	float eqtemp_steps;
 	float duration_s;
-	float note_dur_s;
 	sound_t sound;
 	envelope_t *envelope;
 	int envelope_mode;

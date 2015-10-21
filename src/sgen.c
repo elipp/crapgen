@@ -287,13 +287,13 @@ static dynamic_wlist_t *get_primitive_args(expression_t *prim_expr) {
 }
 
 static void dump_note_t(note_t *n) {
-	fprintf(stderr, "note: num_values = %d\n", n->num_values);
-	if (n->num_values == 1) {
-		fprintf(stderr, "(single) note value: %d\n", n->values[0]);
+	fprintf(stderr, "note: num_children = %d\n", n->num_children);
+	if (n->num_children == 0) {
+		fprintf(stderr, "(single) note pitch: %d\n", n->pitch);
 		return;
 	}	
-	for (int i = 0; i < n->num_values; ++i) {
-		fprintf(stderr, "(chord) value %d/%d: %d\n", i+1, n->num_values, n->values[i]);
+	for (int i = 0; i < n->num_children; ++i) {
+		fprintf(stderr, "(chord) value %d/%d: %d\n", i+1, n->num_children, n->children[i].pitch);
 		//printf("(chord) value %d/%d: \n", i, n->num_values);
 	}
 	
@@ -346,6 +346,7 @@ static int parse_note(char *notestr, note_t *note) {
 	// assuming the note is already allocated here!
 
 	if (isdigit(notestr[0])) {
+		fprintf(stderr, "debug: digit note: \"%s\"\n", notestr);
 
 		dynamic_wlist_t *tokens = tokenize_wr_delim(notestr, "_");
 		if (tokens->num_items > 1) {
@@ -358,57 +359,114 @@ static int parse_note(char *notestr, note_t *note) {
 			char *basestr = tokens->items[0];
 
 			if (!validate_digit_note(basestr)) {
+				SGEN_ERROR("parse_note: invalid digit note! note = \"%s\"\n", basestr);
 				dynamic_wlist_destroy(tokens);
 				return -1;
 			}
 
 			int transp = count_transposition(basestr);	
-			note->values = malloc(sizeof(int));
 
 			// we know at this stage that the string can be (at least partially) strtod'd, 
 			// because of validate_digit_note
-			double nvalue;
-			convert_string_to_double(basestr, &nvalue);
-			note->values[0] = nvalue;
-			note->values[0] += transp;
+			float pitch;
+			convert_string_to_float(basestr, &pitch);
+			note->pitch = pitch + transp;
 			
 			char *valuestr = tokens->items[1];
 			convert_string_to_float(valuestr, &note->value);
+			fprintf(stderr, "digit note valid!\n");
 
 		}
+		else {
+			if (!validate_digit_note(notestr)) {
+				SGEN_ERROR("parse_note: invalid digit note! note = \"%s\"\n", notestr);
+				dynamic_wlist_destroy(tokens);
+				return -1;
+			}
+
+			float pitch;
+			convert_string_to_float(notestr, &pitch);
+			int transp = count_transposition(notestr);
+			note->pitch = pitch + transp;
+			note->value = 1; // NYI: should be taken from the previously active note value..
+			
+			fprintf(stderr, "digit note valid!\n");
+
+		}	
 
 		dynamic_wlist_destroy(tokens);
 	} 
 
 	else {
+		fprintf(stderr, "debug: music input note: \"%s\"\n", notestr);
 		// if note is music input, such as "ais", "c" or whatever		
 		// TODO: add those persistent transposition states, like lilypond
-		dynamic_wlist_t *tokens = tokenize_wr_delim(notestr, "\',");
+		
+		dynamic_wlist_t *tokens = tokenize_wr_delim(notestr, ",\'");
 		char *basestr = tokens->items[0];
-		int notevalue = map_notename_to_int(basestr);
-		if (notevalue < 0) {
-			SGEN_ERROR("parse_note: syntax error: unresolved notename \"%s\"!\n", basestr);
-			dynamic_wlist_destroy(tokens);
 
-			return 0;
-		}
-		note->values = malloc(sizeof(int));
-		int transp = count_transposition(basestr);
-		note->values[0] = notevalue + transp;
-
-		char *valuestr = tokens->items[tokens->num_items-1]; // the note value (aika-arvo) should be the last element
-		if (valuestr) {
-			int ret = convert_str_to_float(valuestr, &note->value);
-			if (ret < 1) {
-				SGEN_ERROR("parse_note: syntax error: invalid note value \"%s\"!\n", valuestr);
+		if (tokens->num_items > 1) {
+			int pitchval = map_notename_to_int(basestr);
+			if (pitchval < 0) {
+				SGEN_ERROR("parse_note: syntax error: unresolved notename \"%s\"!\n", basestr);
 				dynamic_wlist_destroy(tokens);
 				return 0;
 			}
+
+			char *valuestr = tokens->items[tokens->num_items-1]; // the note value (aika-arvo) should be the last element
+			if (valuestr) {
+				int ret = convert_string_to_float(valuestr, &note->value);
+				if (ret < 1) {
+					SGEN_ERROR("parse_note: syntax error: invalid note value \"%s\"!\n", valuestr);
+					dynamic_wlist_destroy(tokens);
+					return 0;
+				}
+			}
+
+			dynamic_wlist_destroy(tokens);
+			// this sux. the ,s and 's need to be adjacent to one another, which we currently have no checking for
+			int transp = count_transposition(notestr);
+
+
+			note->pitch = pitchval + transp;
+
+			fprintf(stderr, "debug: parse_note: note->pitch = %d\n", note->pitch);
+			return 1;
 		}
 
-		dynamic_wlist_destroy(tokens);
+		else {
+		// no transposition stuff, just a note with a note name and (possibly) a value
+
+			size_t len = strlen(notestr);
+			int i = len-1;
+			char *valuestr = NULL;
+
+			while (i > 0 && isdigit(notestr[i])) --i; 
+
+			if (i >= len-1) {
+				// then there's no value. should be taken from the previously active note's value
+				fprintf(stderr, "debug: music input note has no value. setting to 1\n");
+				note->value = 1;
+			} 
+			else {
+				fprintf(stderr, "debug: value starts at index %d\n", i);
+				int value_len = len - i;		
+				valuestr = substring(notestr, i+1, value_len); // this is sa_ (string_allocator.c), so free() is a no-op
+				float value;
+				convert_string_to_float(valuestr, &value);
+				note->value = value;
+			}
+
+			char *pitchstr = substring(notestr, 0, i+1);
+			fprintf(stderr, "debug: music input: got \"%s\" as pitch and \"%s\" as value\n", pitchstr, valuestr);
+			int pitchval = map_notename_to_int(pitchstr);
+			note->pitch = pitchval;
+
+			return 1;
+		}
 
 	}
+
 	return 1;
 
 }
@@ -435,8 +493,8 @@ static int get_chord(note_t *note, char** cur_note, char** last_note) {
 	// find note ending with '>'
 	while (cur_note <= last_note) {
 		char *loc;
-		if ((loc = strchr(*cur_note, '<')) != NULL) {
-			SGEN_ERROR("syntax error: (chord): found \'<\' inside \'<\' (chord nesting is not supported!\n");
+		if ((loc = strchr(*cur_note+1, '<')) != NULL) {
+			SGEN_ERROR("syntax error: (chord): found \'<\' inside \'<\' (chord nesting is not supported!) (note = \"%s\")\n", *cur_note);
 		}
 
 		if ((loc = strchr(*cur_note, '>')) != NULL) {
@@ -446,7 +504,7 @@ static int get_chord(note_t *note, char** cur_note, char** last_note) {
 				return -1; 
 			}
 			else  {
-				//fprintf(stderr, "debug: found suitable end note: \"%s\"\n", *cur_note);
+				fprintf(stderr, "debug: found suitable end note: \"%s\"\n", *cur_note);
 				chord_end = cur_note;
 				break;
 
@@ -467,27 +525,42 @@ static int get_chord(note_t *note, char** cur_note, char** last_note) {
 	note->children = malloc(num_notes*sizeof(note_t));
 	note->num_children = num_notes;
 
+
 	// exclude the beginning '<' from the first notename
-	if (parse_note((*chord_beg + 1), &note->children[0])) {
-		// do something cool
+	if (!parse_note((*chord_beg + 1), &note->children[0])) {
+		// cleanup, return error
+		SGEN_ERROR("parse_note failed! note = \"%s\"\n", (*chord_beg + 1));
 		return 0;
 	}
 
+	note->children[0].children = NULL;
+	note->children[0].num_children = 0;
 
 	int j = 1;
 	while (j < num_notes - 1) {
-//		note->values[j] = map_notename_to_int(*(chord_beg + j));
-		if (!parse_note((*chord_beg + j), &note)) {
-			// do something cool
+		if (!parse_note(*(chord_beg + j), &note->children[j])) {
+			// cleanup, return error
+			SGEN_ERROR("parse_note failed! note = \"%s\"\n", (*chord_beg + j));
+			return 0;
 		}
+		note->children[j].children = NULL;
+		note->children[j].num_children = 0;
 		++j;
 	}
 	// CONSIDER: just removing the original '>' in-place, the note strings are useless after this stage anyway
+
 	size_t last_len = strlen(*chord_end);
 	char *last_dup_clean = strdup(*chord_end);
 	last_dup_clean[last_len-1] = '\0'; // remove the terminating '>' 
 
-	note->values[j] = map_notename_to_int(last_dup_clean);
+	if (!parse_note(last_dup_clean, &note->children[j])) {
+		// cleanup
+		free(last_dup_clean);
+		return 0;
+	}
+
+	note->children[j].children = NULL;
+	note->children[j].num_children = 0;
 
 	free(last_dup_clean);
 	return num_notes;
@@ -518,6 +591,7 @@ note_t *convert_notestr_wlist_to_notelist(dynamic_wlist_t *notestr_wlist, size_t
 		int ret = 0;
 
 		if ((ret = have_chord(cur_note)) < 0) {
+			SGEN_ERROR("have_chord returned < 0!\n");
 			err = 1; break;
 		} 
 		else if (ret > 0) {
@@ -525,15 +599,17 @@ note_t *convert_notestr_wlist_to_notelist(dynamic_wlist_t *notestr_wlist, size_t
 			if (num_notes > 0) {
 				cur_note += num_notes - 1;
 			} else {
+				SGEN_ERROR("get_chord returned <= 0!\n");
 				err = 1; break;
 			}
 		} 
 		else {
-			// no chord, just map_notename_to_str
-			notes[n].values = malloc(sizeof(int));
-			notes[n].num_values = 1;
-			notes[n].values[0] = map_notename_to_int(*cur_note);
-			//			fprintf(stderr, "debug: (single) note value: %d\n", notes[num_note].values[0]);
+			if (!parse_note(*cur_note, &notes[n])) {
+				SGEN_ERROR("parse_note returned 0!\n");
+				err = 1; break;
+			}
+			notes[n].children = NULL;
+			notes[n].num_children = 0;
 		}
 
 		++n;
@@ -543,14 +619,13 @@ note_t *convert_notestr_wlist_to_notelist(dynamic_wlist_t *notestr_wlist, size_t
 
 
 	if (err) {
-		// TODO: really cleanup (free alloc'd notes[i].values), or just bail
 		free(notes);
 		notes = NULL;
 	}
 
 
 	*num_notes = n;
-	if (num_notes != notestr_wlist->num_items) {
+	if (*num_notes != notestr_wlist->num_items) {
 		note_t *shrink_to_fit = realloc(notes, n * sizeof(note_t));
 		return shrink_to_fit;
 	} else {
@@ -563,7 +638,7 @@ note_t *convert_notestr_wlist_to_notelist(dynamic_wlist_t *notestr_wlist, size_t
 static int read_track(expression_t *track_expr, track_t *t, sgen_ctx_t *c) {
 
 	// default vals. TODO: replace this with something cuter
-	t->notes_per_beat = 1;
+	t->bpm = c->tempo_bpm;
 	t->channel = 0;
 	t->loop = 0;
 	t->active = 1;
@@ -629,8 +704,6 @@ static int read_track(expression_t *track_expr, track_t *t, sgen_ctx_t *c) {
 	t->notes = malloc(notelist->num_items * sizeof(note_t));
 	t->num_notes = notelist->num_items;
 
-	t->note_dur_s = (1.0/(t->notes_per_beat*(c->tempo_bpm/60.0)));
-	t->duration_s = t->num_notes * t->note_dur_s;
 
 	t->notes = convert_notestr_wlist_to_notelist(notelist, &t->num_notes);
 
@@ -795,19 +868,18 @@ static int sgen_dump(output_t *output) {
 
 }
 
-static int track_synthesize(track_t *t, long num_samples, float *lbuf, float *rbuf) {
+static int track_synthesize(track_t *t, long num_samples_total, float *lbuf, float *rbuf) {
 
 	// perhaps add multi-threading to this, as in all tracks be synthesized simultaneously in threads
 
 	printf("sgen: synthesizing track %s\n", t->name);
-	printf("props: loop = %d, active = %d, transpose = %d, channel = %d, notes_per_beat = %f\n", t->loop, t->active, t->transpose, t->channel, t->notes_per_beat);
-	printf("num_samples = %ld\n", num_samples);
+	printf("props: loop = %d, active = %d, transpose = %d, channel = %d, bpm = %f\n", t->loop, t->active, t->transpose, t->channel, t->bpm);
+	printf("num_samples_total = %ld\n", num_samples_total);
 	if (!t->active) { return 0; }
 
 	float samplerate = 44100.0;	// get this from the output_t struct
 
-	long num_samples_per_note = samplerate*t->note_dur_s;
-	printf("note_dur: %f, num_samples_per_note = %ld\n\n", t->note_dur_s, num_samples_per_note);
+	long num_samples_max = samplerate*(60.0/t->bpm)*4; // the length of a whole note (semibreve)
 
 	long lbuf_offset = 0;
 	long rbuf_offset = 0;
@@ -815,40 +887,53 @@ static int track_synthesize(track_t *t, long num_samples, float *lbuf, float *rb
 	int note_index = 0;
 	float freqs[64];
 
-	float *n_samples = malloc(num_samples_per_note*sizeof(float));
-	memset(n_samples, 0x0, num_samples_per_note*sizeof(float));
+	float *n_samples = malloc(num_samples_max*sizeof(float));
 
 	double eqtemp_coef = pow(2, 1.0/t->eqtemp_steps);
+	long num_samples_prev = num_samples_max;
 
-	while (lbuf_offset < num_samples && rbuf_offset < num_samples) {
+	while (lbuf_offset < num_samples_total && rbuf_offset < num_samples_total) {
 		if (note_index >= t->num_notes) {
 			if (!t->loop) { break; }
 			else { note_index = 0; }
 		}
 
+		long num_samples_longest = 0;
+
 		note_t *n = &t->notes[note_index];
 
-		// if (!num_samples_per_note is bigger than the previous one) n_samples = realloc(n_samples, new_n*sizeof(float)); 
-		// this only goes for the dynamic lilypond-esque note input system, which is yet to be implemented
-
 		float dt = 1.0/samplerate;
-		float A = 1.0/n->num_values;
+		float A = n->num_children > 0 ? 1.0 : 1.0;// (1.0/n->num_children) : 1.0;
 
 		freq_from_noteindex(n, n->transpose, eqtemp_coef, freqs);
-		memset(n_samples, 0x0, num_samples_per_note*sizeof(float));
+		memset(n_samples, 0x0, num_samples_prev*sizeof(float)); // memset previous samples to 0
 
-		if (n->num_values == 1 && n->values[0] == 0) {
-			// skip this, 0 -> rest
-			goto increment;
+		if (n->num_children > 0) {
+			for (int i = 0; i < n->num_children; ++i) {
+				long num_samples_this = num_samples_max / n->children[i].value;
+				num_samples_longest = num_samples_this > num_samples_longest ? num_samples_this : num_samples_longest;
+				float time = 0;
+				for (long j = 0; j < num_samples_this; ++j) {
+					float ea = envelope_get_amplitude_noprecalculate(j, num_samples_this, n->env);
+					float tv = t->vibrato ? t->vibrato->width * sin(t->vibrato->freq*time) : 0;
+					n_samples[j] += n->env->parms[ENV_AMPLITUDE]*A*ea*t->sound.wform(freqs[i], time + tv, 0);
+					time += dt;
+				}
+			}
 		}
 
+		else {
+//			if (n->pitch == 0) goto increment;
 
-		for (int i = 0; i < n->num_values; ++i) {
+			long num_samples_this = num_samples_max / n->value;
+			num_samples_longest = num_samples_this > num_samples_longest ? num_samples_this : num_samples_longest;
+
 			float time = 0;
-			for (long j = 0; j < num_samples_per_note; ++j) {
-				float ea = envelope_get_amplitude_noprecalculate(j, num_samples_per_note, n->env);
+
+			for (long j = 0; j < num_samples_this; ++j) {
+				float ea = envelope_get_amplitude_noprecalculate(j, num_samples_this, n->env);
 				float tv = t->vibrato ? t->vibrato->width * sin(t->vibrato->freq*time) : 0;
-				n_samples[j] += n->env->parms[ENV_AMPLITUDE]*A*ea*t->sound.wform(freqs[i], time + tv, 0);
+				n_samples[j] += n->env->parms[ENV_AMPLITUDE]*A*ea*t->sound.wform(freqs[0], time + tv, 0);
 				time += dt;
 			}
 		}
@@ -858,7 +943,7 @@ static int track_synthesize(track_t *t, long num_samples, float *lbuf, float *rb
 
 		if (t->channel & 0x1) {
 			long i = 0;
-			while (i < num_samples_per_note && n_offset_l < num_samples) {
+			while (i < num_samples_longest && n_offset_l < num_samples_total) {
 				lbuf[n_offset_l] += n_samples[i];
 				++i;
 				++n_offset_l;
@@ -867,7 +952,7 @@ static int track_synthesize(track_t *t, long num_samples, float *lbuf, float *rb
 
 		if (t->channel & 0x2) {
 			long i = 0;
-			while (i < num_samples_per_note && n_offset_r < num_samples) {
+			while (i < num_samples_longest && n_offset_r < num_samples_total) {
 				rbuf[n_offset_r] += n_samples[i];
 				++i;
 				++n_offset_r;
@@ -876,9 +961,12 @@ static int track_synthesize(track_t *t, long num_samples, float *lbuf, float *rb
 
 increment:
 
-		lbuf_offset += num_samples_per_note;
-		rbuf_offset += num_samples_per_note;
+		lbuf_offset += num_samples_longest;
+		rbuf_offset += num_samples_longest;
 		++note_index;
+
+		num_samples_prev = num_samples_longest;
+
 	}
 
 	free(n_samples);
