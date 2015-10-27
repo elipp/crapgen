@@ -69,7 +69,6 @@ typedef struct note_t {
 	struct note_t *children; // NULL for top level notes
 	int num_children;
 	int pitch;
-	int transpose;
 	float value; // relative duration. 1 for whole note, 2 for half note etc. (ex. a_4)
 	float duration_s;
 	envelope_t *env;

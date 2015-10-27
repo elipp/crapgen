@@ -5,6 +5,8 @@
 char *substring(const char* str, int beg_pos, int nc) {
 
 	if (!str) { return NULL; }
+	if (nc == 0) { return NULL; }
+
 	size_t str_len = strlen(str);
 	if (str_len < 1) { return NULL; }
 

@@ -7,6 +7,11 @@
 
 
 int convert_string_to_float(const char* str, float *out) {
+	
+	if (!str) { 
+		*out = 0;
+		return 0;
+	}
 
 	char *endptr;
 	*out = strtof(str, &endptr);		

@@ -299,7 +299,7 @@ static void dump_note_t(note_t *n) {
 	
 }
 
-static int count_transposition(char *notestr) {
+static int count_transposition(const char *notestr) {
 
 	size_t len = strlen(notestr);
 	int up = 0, down = 0;
@@ -311,7 +311,7 @@ static int count_transposition(char *notestr) {
 
 }
 
-static int validate_digit_note(char *notestr) {
+static int validate_digit_note(const char *notestr) {
 
 	double d = 0;
 	int ret = 0;
@@ -341,139 +341,118 @@ static int validate_digit_note(char *notestr) {
 	return 1;
 }
 
-static int parse_note(char *notestr, note_t *note, track_ctx_t *ctx) {
+static int parse_digit_note(const char *notestr, note_t *note, track_ctx_t *ctx) {
 
-	// TODO: Refactor this piece of crap :DDd
+	dynamic_wlist_t *tokens = tokenize_wr_delim(notestr, "_");
+		
+	const char *basestr = NULL, *valuestr = NULL;
+
+	if (tokens->num_items > 2) {
+		SGEN_ERROR("parse_note: invalid digit-based note \"%s\" (multiple \'_\'s?)\n", notestr);
+		return -1;
+	}
+
+	if (tokens->num_items > 1) {
+		basestr = tokens->items[0];
+		valuestr = tokens->items[1];
+	} else {
+		basestr = notestr;
+		valuestr = NULL;
+	}
+
+	if (!validate_digit_note(basestr)) {
+		SGEN_ERROR("parse_note: invalid digit note! note = \"%s\"\n", notestr);
+		dynamic_wlist_destroy(tokens);
+		return -1;
+	}
+
+
+	int transp = count_transposition(basestr);	
+	ctx->transpose += transp;
+
+	// we know at this stage that the string can be (at least partially) strtod'd (because of validate_digit_note)
+
+	float pitch;
+	convert_string_to_float(basestr, &pitch);
+	note->pitch = pitch + ctx->transpose;
+
+	if (valuestr) {
+		convert_string_to_float(valuestr, &note->value);
+		// make new value the current value :P
+		ctx->value = note->value;
+	} else {
+		note->value = ctx->value;
+	}
+
+	fprintf(stderr, "debug: digit_note: basestr = \"%s\", valuestr = \"%s\"\n", basestr, valuestr);
+
+	dynamic_wlist_destroy(tokens);
+
+	return 1;
+
+}
+
+static int parse_musicinput_note(const char *notestr, note_t *note, track_ctx_t *ctx) {
+
+	size_t len = strlen(notestr);
+	int i = 0;
+	int j = len - 1;
+
+	char *basestr = NULL;
+	char *valuestr = NULL;
+
+	while (i < len && isalpha(notestr[i])) ++i;
+	while (j > 0 && isdigit(notestr[j])) --j; 
+
+	// the interval notestr[i:j] should now contain any transposition stuff
+
+	if (j >= len-1) {
+		// then there's no value. should be taken from the previously active note's value
+		note->value = ctx->value;
+		valuestr = NULL;
+	} 
+	else {
+		// these are string pooled (string_allocator.c), so free() is a no-op
+		valuestr = substring(notestr, j+1, len - j); 
+
+		convert_string_to_float(valuestr, &note->value);
+		ctx->value = note->value;
+	}
+	
+	basestr = substring(notestr, 0, i);
+
+	while (i < j) {
+		if (notestr[i] != ',' && notestr[i] != '\'') { 
+			SGEN_ERROR("syntax error: unknown char input \'%c\'!\n", notestr[i]);
+			return 0; 
+		}
+		++i;
+	}
+	
+	int pitchval = map_notename_to_int(basestr);
+	if (pitchval < 0) {
+		SGEN_ERROR("parse_note: syntax error: unresolved notename \"%s\"!\n", basestr);
+		return 0;
+	}
+
+	
+	int transp = count_transposition(notestr);
+	ctx->transpose += transp;
+
+	note->pitch = pitchval + ctx->transpose;
+
+	return 1;
+}
+
+static int parse_note(const char *notestr, note_t *note, track_ctx_t *ctx) {
 
 	// assuming the note is already allocated here!
-	fprintf(stderr, "Debug: ctx->transpose = %d\n", ctx->transpose);
+//	fprintf(stderr, "Debug: ctx->transpose = %d\n", ctx->transpose);
 
-	if (isdigit(notestr[0])) {
-		fprintf(stderr, "debug: digit note: \"%s\"\n", notestr);
+	if (isdigit(notestr[0])) return parse_digit_note(notestr, note, ctx);
 
-		dynamic_wlist_t *tokens = tokenize_wr_delim(notestr, "_");
-		if (tokens->num_items > 1) {
-			// then we probably have a digit-based number with a value (e.g. 3_8)
-			if (tokens->num_items > 2) {
-				SGEN_ERROR("parse_note: invalid digit-based note \"%s\" (multiple \'_\'s?)\n", notestr);
-				return -1;
-			}
+	else if (isalpha(notestr[0]))  return parse_musicinput_note(notestr, note, ctx);
 
-			char *basestr = tokens->items[0];
-
-			if (!validate_digit_note(basestr)) {
-				SGEN_ERROR("parse_note: invalid digit note! note = \"%s\"\n", basestr);
-				dynamic_wlist_destroy(tokens);
-				return -1;
-			}
-
-			// CONSIDER: probably don't want this behaviour, no sticky transp states for digit notes
-
-			int transp = count_transposition(basestr);	
-			ctx->transpose += transp;
-
-			// we know at this stage that the string can be (at least partially) strtod'd (because of validate_digit_note)
-
-			float pitch;
-			convert_string_to_float(basestr, &pitch);
-			note->pitch = pitch + ctx->transpose;
-			
-			char *valuestr = tokens->items[1];
-			convert_string_to_float(valuestr, &note->value);
-			ctx->value = note->value;
-
-		}
-		else {
-			if (!validate_digit_note(notestr)) {
-				SGEN_ERROR("parse_note: invalid digit note! note = \"%s\"\n", notestr);
-				dynamic_wlist_destroy(tokens);
-				return -1;
-			}
-
-			float pitch;
-			convert_string_to_float(notestr, &pitch);
-
-			int transp = count_transposition(notestr);
-			ctx->transpose += transp;
-
-			note->pitch = pitch + ctx->transpose;
-			note->value = ctx->value; 
-			
-			fprintf(stderr, "digit note valid!\n");
-
-		}	
-
-		dynamic_wlist_destroy(tokens);
-	} 
-
-	else if (isalpha(notestr[0])) {
-		fprintf(stderr, "debug: music input note: \"%s\"\n", notestr);
-		// if note is music input, such as "ais", "c" or whatever		
-		
-		dynamic_wlist_t *tokens = tokenize_wr_delim(notestr, ",\'");
-		char *basestr = tokens->items[0];
-
-		if (tokens->num_items > 1) {
-			int pitchval = map_notename_to_int(basestr);
-			if (pitchval < 0) {
-				SGEN_ERROR("parse_note: syntax error: unresolved notename \"%s\"!\n", basestr);
-				dynamic_wlist_destroy(tokens);
-				return 0;
-			}
-
-			char *valuestr = tokens->items[tokens->num_items-1]; // the note value (aika-arvo) should be the last element
-			if (valuestr) {
-				int ret = convert_string_to_float(valuestr, &note->value);
-				if (ret < 1) {
-					SGEN_ERROR("parse_note: syntax error: invalid note value \"%s\"!\n", valuestr);
-					dynamic_wlist_destroy(tokens);
-					return 0;
-				}
-			}
-
-			// this sux. the ,s and 's need to be adjacent to one another, which we currently have no checking for
-			int transp = count_transposition(notestr);
-			ctx->transpose += transp;
-
-			note->pitch = pitchval + ctx->transpose;
-
-			dynamic_wlist_destroy(tokens);
-			return 1;
-		}
-
-		else {
-		
-			size_t len = strlen(notestr);
-			int i = len-1;
-			char *valuestr = NULL;
-
-			while (i > 0 && isdigit(notestr[i])) --i; 
-
-			if (i >= len-1) {
-				// then there's no value. should be taken from the previously active note's value
-				fprintf(stderr, "debug: music input note has no value. setting to 1\n");
-				note->value = ctx->value;
-			} 
-			else {
-				fprintf(stderr, "debug: value starts at index %d\n", i);
-				int value_len = len - i;		
-				valuestr = substring(notestr, i+1, value_len); // this is sa_ (string_allocator.c), so free() is a no-op
-				convert_string_to_float(valuestr, &note->value);
-				ctx->value = note->value;
-			}
-
-			int transp = count_transposition(notestr);
-			ctx->transpose += transp;
-
-			char *pitchstr = substring(notestr, 0, i+1);
-			int pitchval = map_notename_to_int(pitchstr);
-
-			note->pitch = pitchval + ctx->transpose;
-
-			return 1;
-		}
-
-	}
 	else {
 		SGEN_ERROR("syntax error: invalid note name \"%s\"!\n", notestr);
 		return 0;
@@ -753,7 +732,6 @@ static int read_track(expression_t *track_expr, track_t *t, sgen_ctx_t *c) {
 			t->notes[i].env = t->envelope;
 		}
 
-		t->notes[i].transpose = t->transpose;
 	}
 
 	printf("\n");
@@ -941,7 +919,7 @@ static int track_synthesize(track_t *t, long num_samples_total, float *lbuf, flo
 		float dt = 1.0/samplerate;
 		float A = n->num_children > 0 ? 1.0 : 1.0;// (1.0/n->num_children) : 1.0;
 
-		freq_from_noteindex(n, n->transpose, eqtemp_coef, freqs);
+		freq_from_noteindex(n, t->transpose, eqtemp_coef, freqs);
 		memset(n_samples, 0x0, num_samples_prev*sizeof(float)); // memset previous samples to 0
 
 		if (n->num_children > 0) {
@@ -994,8 +972,6 @@ static int track_synthesize(track_t *t, long num_samples_total, float *lbuf, flo
 				++n_offset_r;
 			}
 		}
-
-increment:
 
 		lbuf_offset += num_samples_longest;
 		rbuf_offset += num_samples_longest;
