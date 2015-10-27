@@ -341,9 +341,12 @@ static int validate_digit_note(char *notestr) {
 	return 1;
 }
 
-static int parse_note(char *notestr, note_t *note) {
+static int parse_note(char *notestr, note_t *note, track_ctx_t *ctx) {
+
+	// TODO: Refactor this piece of crap :DDd
 
 	// assuming the note is already allocated here!
+	fprintf(stderr, "Debug: ctx->transpose = %d\n", ctx->transpose);
 
 	if (isdigit(notestr[0])) {
 		fprintf(stderr, "debug: digit note: \"%s\"\n", notestr);
@@ -364,17 +367,20 @@ static int parse_note(char *notestr, note_t *note) {
 				return -1;
 			}
 
-			int transp = count_transposition(basestr);	
+			// CONSIDER: probably don't want this behaviour, no sticky transp states for digit notes
 
-			// we know at this stage that the string can be (at least partially) strtod'd, 
-			// because of validate_digit_note
+			int transp = count_transposition(basestr);	
+			ctx->transpose += transp;
+
+			// we know at this stage that the string can be (at least partially) strtod'd (because of validate_digit_note)
+
 			float pitch;
 			convert_string_to_float(basestr, &pitch);
-			note->pitch = pitch + transp;
+			note->pitch = pitch + ctx->transpose;
 			
 			char *valuestr = tokens->items[1];
 			convert_string_to_float(valuestr, &note->value);
-			fprintf(stderr, "digit note valid!\n");
+			ctx->value = note->value;
 
 		}
 		else {
@@ -386,9 +392,12 @@ static int parse_note(char *notestr, note_t *note) {
 
 			float pitch;
 			convert_string_to_float(notestr, &pitch);
+
 			int transp = count_transposition(notestr);
-			note->pitch = pitch + transp;
-			note->value = 1; // NYI: should be taken from the previously active note value..
+			ctx->transpose += transp;
+
+			note->pitch = pitch + ctx->transpose;
+			note->value = ctx->value; 
 			
 			fprintf(stderr, "digit note valid!\n");
 
@@ -397,10 +406,9 @@ static int parse_note(char *notestr, note_t *note) {
 		dynamic_wlist_destroy(tokens);
 	} 
 
-	else {
+	else if (isalpha(notestr[0])) {
 		fprintf(stderr, "debug: music input note: \"%s\"\n", notestr);
 		// if note is music input, such as "ais", "c" or whatever		
-		// TODO: add those persistent transposition states, like lilypond
 		
 		dynamic_wlist_t *tokens = tokenize_wr_delim(notestr, ",\'");
 		char *basestr = tokens->items[0];
@@ -423,20 +431,18 @@ static int parse_note(char *notestr, note_t *note) {
 				}
 			}
 
-			dynamic_wlist_destroy(tokens);
 			// this sux. the ,s and 's need to be adjacent to one another, which we currently have no checking for
 			int transp = count_transposition(notestr);
+			ctx->transpose += transp;
 
+			note->pitch = pitchval + ctx->transpose;
 
-			note->pitch = pitchval + transp;
-
-			fprintf(stderr, "debug: parse_note: note->pitch = %d\n", note->pitch);
+			dynamic_wlist_destroy(tokens);
 			return 1;
 		}
 
 		else {
-		// no transposition stuff, just a note with a note name and (possibly) a value
-
+		
 			size_t len = strlen(notestr);
 			int i = len-1;
 			char *valuestr = NULL;
@@ -446,25 +452,31 @@ static int parse_note(char *notestr, note_t *note) {
 			if (i >= len-1) {
 				// then there's no value. should be taken from the previously active note's value
 				fprintf(stderr, "debug: music input note has no value. setting to 1\n");
-				note->value = 1;
+				note->value = ctx->value;
 			} 
 			else {
 				fprintf(stderr, "debug: value starts at index %d\n", i);
 				int value_len = len - i;		
 				valuestr = substring(notestr, i+1, value_len); // this is sa_ (string_allocator.c), so free() is a no-op
-				float value;
-				convert_string_to_float(valuestr, &value);
-				note->value = value;
+				convert_string_to_float(valuestr, &note->value);
+				ctx->value = note->value;
 			}
 
+			int transp = count_transposition(notestr);
+			ctx->transpose += transp;
+
 			char *pitchstr = substring(notestr, 0, i+1);
-			fprintf(stderr, "debug: music input: got \"%s\" as pitch and \"%s\" as value\n", pitchstr, valuestr);
 			int pitchval = map_notename_to_int(pitchstr);
-			note->pitch = pitchval;
+
+			note->pitch = pitchval + ctx->transpose;
 
 			return 1;
 		}
 
+	}
+	else {
+		SGEN_ERROR("syntax error: invalid note name \"%s\"!\n", notestr);
+		return 0;
 	}
 
 	return 1;
@@ -483,7 +495,7 @@ static int have_chord(char **cur_note) {
 	return 0;
 }
 
-static int get_chord(note_t *note, char** cur_note, char** last_note) {
+static int get_chord(note_t *note, char** cur_note, char** last_note, track_ctx_t *ctx) {
 
 	char **chord_beg = cur_note;
 	char **chord_end = NULL;
@@ -515,19 +527,37 @@ static int get_chord(note_t *note, char** cur_note, char** last_note) {
 	}
 
 	if (cur_note == NULL || cur_note == last_note) {
+		// don't know if this is actually reachable
 		SGEN_ERROR("syntax error: (chord) no corresponding \'>\' encountered!\n");
 		return -1;
 	}
-	// construct actual note
+
+	if (cur_note == chord_beg) {
+
+		// do just a regular single note parse
+		// we have previously established that the last char is '>', then just remove it
+
+		size_t len = strlen(*cur_note);
+		(*cur_note)[len-1] = '\0'; 
+		if (!parse_note((*chord_beg + 1), note, ctx)) {
+			SGEN_ERROR("parse_note failed! note = \"%s\"\n", (*chord_beg + 1));
+			return 0;
+		}
+
+		return 1;
+	}
+
+	// construct chord
 
 	int num_notes = (chord_end - chord_beg) + 1;
+
+	fprintf(stderr, "num_notes: %d\n", num_notes);
 
 	note->children = malloc(num_notes*sizeof(note_t));
 	note->num_children = num_notes;
 
-
 	// exclude the beginning '<' from the first notename
-	if (!parse_note((*chord_beg + 1), &note->children[0])) {
+	if (!parse_note((*chord_beg + 1), &note->children[0], ctx)) {
 		// cleanup, return error
 		SGEN_ERROR("parse_note failed! note = \"%s\"\n", (*chord_beg + 1));
 		return 0;
@@ -538,7 +568,7 @@ static int get_chord(note_t *note, char** cur_note, char** last_note) {
 
 	int j = 1;
 	while (j < num_notes - 1) {
-		if (!parse_note(*(chord_beg + j), &note->children[j])) {
+		if (!parse_note(*(chord_beg + j), &note->children[j], ctx)) {
 			// cleanup, return error
 			SGEN_ERROR("parse_note failed! note = \"%s\"\n", (*chord_beg + j));
 			return 0;
@@ -553,7 +583,7 @@ static int get_chord(note_t *note, char** cur_note, char** last_note) {
 	char *last_dup_clean = strdup(*chord_end);
 	last_dup_clean[last_len-1] = '\0'; // remove the terminating '>' 
 
-	if (!parse_note(last_dup_clean, &note->children[j])) {
+	if (!parse_note(last_dup_clean, &note->children[j], ctx)) {
 		// cleanup
 		free(last_dup_clean);
 		return 0;
@@ -568,6 +598,7 @@ static int get_chord(note_t *note, char** cur_note, char** last_note) {
 }
 
 note_t *convert_notestr_wlist_to_notelist(dynamic_wlist_t *notestr_wlist, size_t *num_notes) {
+
 	// this is kinda wasteful, since there could be < > chords, but not too bad.
 	// might want to realloc shrink once we're done with the parsing
 	note_t *notes = malloc(notestr_wlist->num_items * sizeof(note_t));
@@ -578,6 +609,10 @@ note_t *convert_notestr_wlist_to_notelist(dynamic_wlist_t *notestr_wlist, size_t
 
 	char **cur_note = notestr_wlist->items;
 	char **last_note = notestr_wlist->items + notestr_wlist->num_items;
+
+	track_ctx_t ctx;
+	ctx.value = 4;
+	ctx.transpose = 0;
 
 	while (cur_note < last_note) {
 		fprintf(stderr, "n = %d\n", n);
@@ -595,16 +630,16 @@ note_t *convert_notestr_wlist_to_notelist(dynamic_wlist_t *notestr_wlist, size_t
 			err = 1; break;
 		} 
 		else if (ret > 0) {
-			int num_notes = get_chord(&notes[n], cur_note, last_note);
+			int num_notes = get_chord(&notes[n], cur_note, last_note, &ctx);
 			if (num_notes > 0) {
 				cur_note += num_notes - 1;
 			} else {
-				SGEN_ERROR("get_chord returned <= 0!\n");
+				SGEN_ERROR("get_chord returned <= 0! cur_note: \"%s\"\n", *cur_note);
 				err = 1; break;
 			}
 		} 
 		else {
-			if (!parse_note(*cur_note, &notes[n])) {
+			if (!parse_note(*cur_note, &notes[n], &ctx)) {
 				SGEN_ERROR("parse_note returned 0!\n");
 				err = 1; break;
 			}
@@ -621,6 +656,7 @@ note_t *convert_notestr_wlist_to_notelist(dynamic_wlist_t *notestr_wlist, size_t
 	if (err) {
 		free(notes);
 		notes = NULL;
+		return NULL;
 	}
 
 

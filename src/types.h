@@ -75,6 +75,11 @@ typedef struct note_t {
 	envelope_t *env;
 } note_t;
 
+typedef struct track_ctx_t {
+	float value;
+	int transpose;
+} track_ctx_t;
+
 typedef struct track_t {
 	char* name;
 

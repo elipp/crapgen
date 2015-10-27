@@ -10,19 +10,22 @@ envelope envelope2(1.0, 0.1, 8, 0.01, 0.1, 0.1);
 vibrato vibrato1(0.0020, 50);
 
 track track1(sound=triangle, channel=l+r, loop=true, transpose=20, envelope=envelope2) = {
-	<8 12> 1_8 3_16 8_16 3_32 4_32 5_32 6_32 7_32 8_32 13_16 14_16 15_32 16_32 17_32 18_32 19_32 20_32
+	c c' c'' c6 c'6 c6 c6
 };
 
-track track2(sound=triangle, channel=l+r, loop=true, transpose=20, envelope=envelope2) = {
-	c fis'6 <c'1 e'2 g'3 bb'3 d''4 fis''4 a''5> ais6 h6 ais6
-};
+//track track2(sound=triangle, channel=l+r, loop=true, transpose=20, envelope=envelope2) = {
+//	c fis'6 <c'1 e'2 g'3 bb'3 d''4 fis''4 a''5> ais6 h6 ais6
+//};
+//
+//track track3(sound=triangle, channel=l+r, loop=true, transpose=20, envelope=envelope2) = {
+//	e fis5 gis5 ais5 h5 ais5
+//};
+//
+//track track4(sound=triangle, channel=l+r, loop=true, transpose=20, envelope=envelope2) = {
+//	fis fis fis fis'6 fis
+//};
+//
 
-track track3(sound=triangle, channel=l+r, loop=true, transpose=20, envelope=envelope2) = {
-	e fis5 gis5 ais5 h5 ais5
-};
-
-track track4(sound=triangle, channel=l+r, loop=true, transpose=20, envelope=envelope2) = {
-	<e a g>
-};
 //song song1() { track1, track2, track3, track4 };
-song song1() { track1, track2, track3 };
+//song song1() { track1, track2, track3 };
+song song1() { track1 };
