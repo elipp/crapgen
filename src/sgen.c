@@ -26,14 +26,6 @@ static dynamic_wlist_t *get_primitive_args(expression_t *prim_expr);
 
 typedef int (*keywordfunc)(expression_t*, sgen_ctx_t*);
 
-static void dump_wlist(dynamic_wlist_t *wlist) {
-	fprintf(stderr, "wlist content: \n");
-	for (int i = 0; i < wlist->num_items; ++i) {
-		fprintf(stderr, "%s\n", wlist->items[i]);
-	}
-
-}
-
 static int map_notename_to_int(const char *notestr) {
 	
 	if (!notestr) return -1;
@@ -802,7 +794,7 @@ int construct_sgen_ctx(input_t *input, sgen_ctx_t *c) {
 		}
 		if (unknown) {
 			SGEN_ERROR("sgen: error: unknown keyword \"%s\"!\n", w); // fix weird error
-			dump_wlist(expriter->wlist);
+			wlist_print(expriter->wlist);
 			return 0;
 		}
 
