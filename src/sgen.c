@@ -311,40 +311,79 @@ static int count_transposition(const char *notestr) {
 
 }
 
+
+static int parse_value_string(const char* valuestr, float *value_out) {
+
+	size_t len = strlen(valuestr);
+	int i = len - 1, num_dots = 0;
+
+	while (i > 0 && valuestr[i] == '.') { --i; ++num_dots; }
+
+	float base_value = 0;
+	char *value_without_dots = substring(valuestr, 0, len-num_dots);
+	int ret = convert_string_to_float(value_without_dots, &base_value); // won't do a full conversion if we have dots in the end, but no biggie
+
+	if (ret < 0) {
+		return 0;
+	}
+
+	// TODO: figure out a better way to calculate this :D this sux. use a series?
+	
+	float accum = 1.0/base_value;
+	float s = 2;
+
+	for (i = 1; i <= num_dots; ++i) {
+		accum += 1.0/(base_value*s);
+		s *= 2;
+	}
+	
+	*value_out = 1.0/accum;
+
+	return 1;
+
+
+}
+
 static int validate_digit_note(const char *notestr) {
 
 	double d = 0;
-	int ret = 0;
-	if ((ret = convert_string_to_double(notestr, &d)) < 1) {
-		if (ret == -1) {
+	int ret = convert_string_to_double(notestr, &d);
+
+	switch(ret) {
+		case -1:
 			return 0; //invalid, couldn't perform even partial conversion
-		}
-		if (ret == 0) {
-			// the only valid non-digit characters after the digit part (as of now) are '\'' and ','
-			dynamic_wlist_t *tokens = tokenize_wr_delim(notestr, "\',");
-			if (tokens->num_items == 1) {
-				// then there's most definitely erroneous characters
-				dynamic_wlist_destroy(tokens);
-				return 0;
-			} else {
-				for (int i = 1; i < tokens->num_items; ++i) {
-					if (tokens->items[i] != NULL) { // there should only be NULL tokens if it's correct
-						dynamic_wlist_destroy(tokens);
-						return 0;
+			break;
+		case 0: {
+				// the only valid non-digit characters after the digit part (as of now) are '\'' and ','
+				dynamic_wlist_t *tokens = tokenize_wr_delim(notestr, "\',");
+				if (tokens->num_items == 1) {
+					// then there's most definitely erroneous characters
+					dynamic_wlist_destroy(tokens);
+					return 0;
+				} else {
+					for (int i = 1; i < tokens->num_items; ++i) {
+						if (tokens->items[i] != NULL) { // there should only be NULL tokens if it's correct
+							dynamic_wlist_destroy(tokens);
+							return 0;
+						}
 					}
 				}
+				dynamic_wlist_destroy(tokens);
 			}
-			dynamic_wlist_destroy(tokens);
-		}
+			break;
+		default:
+			return 1;
+			break;
 	}
 
 	return 1;
+
 }
 
 static int parse_digit_note(const char *notestr, note_t *note, track_ctx_t *ctx) {
 
 	dynamic_wlist_t *tokens = tokenize_wr_delim(notestr, "_");
-		
+
 	const char *basestr = NULL, *valuestr = NULL;
 
 	if (tokens->num_items > 2) {
@@ -377,7 +416,7 @@ static int parse_digit_note(const char *notestr, note_t *note, track_ctx_t *ctx)
 	note->pitch = pitch + ctx->transpose;
 
 	if (valuestr) {
-		convert_string_to_float(valuestr, &note->value);
+		if (!parse_value_string(valuestr, &note->value)) return 0;
 		// make new value the current value :P
 		ctx->value = note->value;
 	} else {
@@ -402,7 +441,7 @@ static int parse_musicinput_note(const char *notestr, note_t *note, track_ctx_t 
 	char *valuestr = NULL;
 
 	while (i < len && isalpha(notestr[i])) ++i;
-	while (j > 0 && isdigit(notestr[j])) --j; 
+	while (j > 0 && (isdigit(notestr[j]) || notestr[j] == '.')) --j; 
 
 	// the interval notestr[i:j] should now contain any transposition stuff
 
@@ -414,11 +453,10 @@ static int parse_musicinput_note(const char *notestr, note_t *note, track_ctx_t 
 	else {
 		// these are string pooled (string_allocator.c), so free() is a no-op
 		valuestr = substring(notestr, j+1, len - j); 
-
-		convert_string_to_float(valuestr, &note->value);
+		if (!parse_value_string(valuestr, &note->value)) return 0;
 		ctx->value = note->value;
 	}
-	
+
 	basestr = substring(notestr, 0, i);
 
 	while (i < j) {
@@ -428,17 +466,16 @@ static int parse_musicinput_note(const char *notestr, note_t *note, track_ctx_t 
 		}
 		++i;
 	}
-	
+
 	int pitchval = map_notename_to_int(basestr);
 	if (pitchval < 0) {
 		SGEN_ERROR("parse_note: syntax error: unresolved notename \"%s\"!\n", basestr);
 		return 0;
 	}
 
-	
-	int transp = count_transposition(notestr);
-	ctx->transpose += transp;
 
+	int transp = count_transposition(notestr);
+	ctx->transpose += transp; 
 	note->pitch = pitchval + ctx->transpose;
 
 	return 1;
@@ -447,7 +484,7 @@ static int parse_musicinput_note(const char *notestr, note_t *note, track_ctx_t 
 static int parse_note(const char *notestr, note_t *note, track_ctx_t *ctx) {
 
 	// assuming the note is already allocated here!
-//	fprintf(stderr, "Debug: ctx->transpose = %d\n", ctx->transpose);
+	//	fprintf(stderr, "Debug: ctx->transpose = %d\n", ctx->transpose);
 
 	if (isdigit(notestr[0])) return parse_digit_note(notestr, note, ctx);
 
@@ -594,14 +631,13 @@ note_t *convert_notestr_wlist_to_notelist(dynamic_wlist_t *notestr_wlist, size_t
 	ctx.transpose = 0;
 
 	while (cur_note < last_note) {
-		fprintf(stderr, "n = %d\n", n);
 		if (err) { break; }
 		if (!cur_note || !*cur_note) {
 			SGEN_WARNING("NULL notestr encountered!\n");
 			err = 1;
 			continue;
 		} 
-		
+
 		int ret = 0;
 
 		if ((ret = have_chord(cur_note)) < 0) {
@@ -937,7 +973,7 @@ static int track_synthesize(track_t *t, long num_samples_total, float *lbuf, flo
 		}
 
 		else {
-//			if (n->pitch == 0) goto increment;
+			//			if (n->pitch == 0) goto increment;
 
 			long num_samples_this = num_samples_max / n->value;
 			num_samples_longest = num_samples_this > num_samples_longest ? num_samples_this : num_samples_longest;

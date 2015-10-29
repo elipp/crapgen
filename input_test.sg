@@ -18,7 +18,7 @@ track track2(sound=triangle, channel=l+r, loop=true, transpose=20, envelope=enve
 };
 
 track track3(sound=triangle, channel=l+r, loop=true, transpose=20, envelope=envelope2) = {
-	<c cis' cis' cis'> <c,, e g b> <c f a c'> c32 cis dis e fis gis a h
+	<c4. cis' cis' cis'> <c,,8 e g b> <c4. f a c'> dis8 c32 cis dis e fis gis a h 8_8
 };
 
 //
@@ -31,6 +31,7 @@ track track3(sound=triangle, channel=l+r, loop=true, transpose=20, envelope=enve
 //};
 //
 //song song1() { track1, track2, track3, track4 };
-//song song1() { track1, track2, track3 };
 
-song song1() { track1, track2, track3 };
+song song1() { track3 };
+
+//song song1() { track1, track2, track3 };
