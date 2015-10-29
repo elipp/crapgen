@@ -30,8 +30,11 @@ track track3(sound=triangle, channel=l+r, loop=true, transpose=20, envelope=enve
 //	fis fis fis fis'6 fis
 //};
 //
-//song song1() { track1, track2, track3, track4 };
-
 song song1() { track3 };
 
+
+
+                     //
+
+//song song1() { track1, track2, track3, track4 };
 //song song1() { track1, track2, track3 };

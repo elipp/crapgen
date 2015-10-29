@@ -11,7 +11,7 @@ char *tidy_string(const char*);
 char *substring(const char* str, int beg_pos, int nc);
 char *str_tolower(const char* input);
 
-int str_all_digits(const char* input);
+int str_isall(const char* input, int (*func)(int));
 int str_to_int_b10(const char* input);
 
 #endif

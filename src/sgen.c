@@ -26,10 +26,18 @@ static dynamic_wlist_t *get_primitive_args(expression_t *prim_expr);
 
 typedef int (*keywordfunc)(expression_t*, sgen_ctx_t*);
 
+static void dump_wlist(dynamic_wlist_t *wlist) {
+	fprintf(stderr, "wlist content: \n");
+	for (int i = 0; i < wlist->num_items; ++i) {
+		fprintf(stderr, "%s\n", wlist->items[i]);
+	}
+
+}
+
 static int map_notename_to_int(const char *notestr) {
 	
 	if (!notestr) return -1;
-	if (str_all_digits(notestr)) return str_to_int_b10(notestr); 
+	if (str_isall(notestr, &isdigit)) return str_to_int_b10(notestr); 
 
 //	size_t nlen = strlen(notestr);
 
@@ -105,7 +113,7 @@ int song_action(expression_t *arg, sgen_ctx_t *c) {
 	if (!read_song(arg, &s, c)) return 0;
 
 	printf("sgen: found song block \"%s\" with tracks: ", s.name);
-	dynamic_wlist_print(s.active_track_ids);
+	wlist_print(s.active_track_ids);
 
 	c->songs[c->num_songs-1] = s;
 
@@ -207,7 +215,7 @@ int envelope_action(expression_t *arg, sgen_ctx_t *c) {
 	printf("sgen: found custom envelope \"%s\"\n", envname);
 	envelope_t *e = malloc(sizeof(envelope_t));
 	*e = envelope_generate(envname, 0.1, parms[ENV_ATTACK], parms[ENV_DECAY], parms[ENV_SUSTAIN], parms[ENV_SUSTAIN_LEVEL], parms[ENV_RELEASE]);
-	dynamic_wlist_destroy(args);
+	wlist_destroy(args);
 
 	c->envelopes[c->num_envelopes-1] = *e;
 
@@ -358,17 +366,17 @@ static int validate_digit_note(const char *notestr) {
 				dynamic_wlist_t *tokens = tokenize_wr_delim(notestr, "\',");
 				if (tokens->num_items == 1) {
 					// then there's most definitely erroneous characters
-					dynamic_wlist_destroy(tokens);
+					wlist_destroy(tokens);
 					return 0;
 				} else {
 					for (int i = 1; i < tokens->num_items; ++i) {
 						if (tokens->items[i] != NULL) { // there should only be NULL tokens if it's correct
-							dynamic_wlist_destroy(tokens);
+							wlist_destroy(tokens);
 							return 0;
 						}
 					}
 				}
-				dynamic_wlist_destroy(tokens);
+				wlist_destroy(tokens);
 			}
 			break;
 		default:
@@ -401,7 +409,7 @@ static int parse_digit_note(const char *notestr, note_t *note, track_ctx_t *ctx)
 
 	if (!validate_digit_note(basestr)) {
 		SGEN_ERROR("parse_note: invalid digit note! note = \"%s\"\n", notestr);
-		dynamic_wlist_destroy(tokens);
+		wlist_destroy(tokens);
 		return -1;
 	}
 
@@ -423,9 +431,9 @@ static int parse_digit_note(const char *notestr, note_t *note, track_ctx_t *ctx)
 		note->value = ctx->value;
 	}
 
-	fprintf(stderr, "debug: digit_note: basestr = \"%s\", valuestr = \"%s\"\n", basestr, valuestr);
+//	fprintf(stderr, "debug: digit_note: basestr = \"%s\", valuestr = \"%s\"\n", basestr, valuestr);
 
-	dynamic_wlist_destroy(tokens);
+	wlist_destroy(tokens);
 
 	return 1;
 
@@ -532,7 +540,7 @@ static int get_chord(note_t *note, char** cur_note, char** last_note, track_ctx_
 				return -1; 
 			}
 			else  {
-				fprintf(stderr, "debug: found suitable end note: \"%s\"\n", *cur_note);
+//				fprintf(stderr, "debug: found suitable end note: \"%s\"\n", *cur_note);
 				chord_end = cur_note;
 				break;
 
@@ -567,7 +575,7 @@ static int get_chord(note_t *note, char** cur_note, char** last_note, track_ctx_
 
 	int num_notes = (chord_end - chord_beg) + 1;
 
-	fprintf(stderr, "num_notes: %d\n", num_notes);
+//	fprintf(stderr, "num_notes: %d\n", num_notes);
 
 	note->children = malloc(num_notes*sizeof(note_t));
 	note->num_children = num_notes;
@@ -733,7 +741,7 @@ static int read_track(expression_t *track_expr, track_t *t, sgen_ctx_t *c) {
 		sa_free(prop);
 		sa_free(val);
 
-		dynamic_wlist_destroy(parms);
+		wlist_destroy(parms);
 
 		++iter;
 	}
@@ -743,7 +751,7 @@ static int read_track(expression_t *track_expr, track_t *t, sgen_ctx_t *c) {
 		*t->envelope = random_envelope();
 	}
 
-	dynamic_wlist_destroy(args);
+	wlist_destroy(args);
 
 	char* track_contents;
 	if (!find_stuff_between('{', '}', track_expr->statement, &track_contents)) {
@@ -794,6 +802,7 @@ int construct_sgen_ctx(input_t *input, sgen_ctx_t *c) {
 		}
 		if (unknown) {
 			SGEN_ERROR("sgen: error: unknown keyword \"%s\"!\n", w); // fix weird error
+			dump_wlist(expriter->wlist);
 			return 0;
 		}
 
@@ -1076,6 +1085,35 @@ static int lexsort_expression_cmpfunc(const void* ea, const void *eb) {
 	return strcmp(a->statement, b->statement);
 }
 
+dynamic_wlist_t *get_relevant_lines(const char* input) {
+
+	dynamic_wlist_t *wl = wlist_create();
+	char *exprbuf, *saveptr;
+
+	char *buf = sa_strdup(input);
+
+	for (exprbuf = strtok_r(buf, "\n", &saveptr); exprbuf != NULL; exprbuf = strtok_r(NULL, "\n", &saveptr)) {
+
+		if (str_isall(exprbuf, &isspace)) continue;
+		char *stripped = strip(exprbuf); // these two are partly redundant..
+
+		if (strlen(stripped) >= 2) {
+			if (strncmp(stripped, "//", 2) != 0) { wlist_append(wl, stripped); }
+		}
+		else {
+			// for completeness, even though an expression of length 1 is always invalid (except ";")
+			wlist_append(wl, stripped);
+		}
+		sa_free(stripped);
+	}
+
+
+	sa_free(buf);
+
+	return wl;
+}
+
+
 int file_get_active_expressions(const char* filename, input_t *input) {
 
 	FILE *fp = fopen(filename, "r");
@@ -1094,20 +1132,24 @@ int file_get_active_expressions(const char* filename, input_t *input) {
 
 	fclose(fp);
 
-	dynamic_wlist_t *exprs_wlist = tokenize_wr_delim_tidy(raw_buf, ";");
+	dynamic_wlist_t *lines = get_relevant_lines(raw_buf); 
 	free(raw_buf);
 
-	long num_exprs = exprs_wlist->num_items;
+	// CONSIDER: this is kinda lazy, could just join lines that don't end with ';' together
+	char *relevant = wlist_join_with_delim(lines, " ");
+	wlist_destroy(lines);
 
-	expression_t *exprs = malloc(num_exprs*sizeof(expression_t));
+	dynamic_wlist_t *exprs_wlist = tokenize_wr_delim(relevant, ";");
+
+	expression_t *exprs = malloc(exprs_wlist->num_items*sizeof(expression_t));
 	for (int i = 0; i < exprs_wlist->num_items; ++i) {
 		exprs[i].statement = exprs_wlist->items[i];
 		exprs[i].wlist = tokenize_wr_delim(exprs[i].statement, " \t");
 	}
 
-	dynamic_wlist_destroy(exprs_wlist);
+	wlist_destroy(exprs_wlist);
 	input->exprs = exprs;
-	input->num_active_exprs = num_exprs;
+	input->num_active_exprs = exprs_wlist->num_items;
 
 	// didn't even know this existed in the c stdlib
 	//qsort(input->exprs, input->num_active_exprs, sizeof(*input->exprs), lexsort_expression_cmpfunc);

@@ -2,7 +2,7 @@
 #include "string_allocator.h"
 #include "string_manip.h"
 
-int dynamic_wlist_append(dynamic_wlist_t* wlist, const char* word) {
+int wlist_append(dynamic_wlist_t* wlist, const char* word) {
 
 	if (!word) { return 0; }
 
@@ -21,7 +21,7 @@ int dynamic_wlist_append(dynamic_wlist_t* wlist, const char* word) {
 }
 
 
-char *dynamic_wlist_join_with_delim(dynamic_wlist_t *wl, const char *delim) {
+char *wlist_join_with_delim(dynamic_wlist_t *wl, const char *delim) {
 	size_t total_length = 0;
 
 	for (long i = 0; i < wl->num_items; ++i) {
@@ -48,7 +48,7 @@ char *dynamic_wlist_join_with_delim(dynamic_wlist_t *wl, const char *delim) {
 
 }
 
-dynamic_wlist_t *dynamic_wlist_create() {
+dynamic_wlist_t *wlist_create() {
 	dynamic_wlist_t *wl = malloc(sizeof(dynamic_wlist_t));
 	wl->num_items = 0;
 	wl->capacity = 8;
@@ -58,7 +58,7 @@ dynamic_wlist_t *dynamic_wlist_create() {
 	return wl;
 }
 
-void dynamic_wlist_destroy(dynamic_wlist_t *wl) {
+void wlist_destroy(dynamic_wlist_t *wl) {
 	for (int i = 0; i < wl->num_items; ++i) {
 		sa_free(wl->items[i]);
 	}
@@ -66,15 +66,15 @@ void dynamic_wlist_destroy(dynamic_wlist_t *wl) {
 	free(wl);
 }
 
-dynamic_wlist_t *dynamic_wlist_tidy(dynamic_wlist_t *wl) {
-	dynamic_wlist_t *t = dynamic_wlist_create();
+dynamic_wlist_t *wlist_tidy(dynamic_wlist_t *wl) {
+	dynamic_wlist_t *t = wlist_create();
 	for (int i = 0; i < wl->num_items; ++i) {
-		dynamic_wlist_append(t, tidy_string(wl->items[i]));
+		wlist_append(t, tidy_string(wl->items[i]));
 	}
 	return t;
 }
 
-void dynamic_wlist_print(dynamic_wlist_t *wl) {
+void wlist_print(dynamic_wlist_t *wl) {
 	printf("wlist contents:\n");
 	for (int i = 0; i < wl->num_items; ++i) {
 		printf(" \"%s\"\n", wl->items[i]);
@@ -83,14 +83,34 @@ void dynamic_wlist_print(dynamic_wlist_t *wl) {
 }
 
 dynamic_wlist_t *tokenize_wr_delim(const char* input, const char* delim) {
-	dynamic_wlist_t *wl = dynamic_wlist_create();
+	dynamic_wlist_t *wl = wlist_create();
 	char *exprbuf, *saveptr;
 
 	char *buf = sa_strdup(input);
 	//size_t input_len = strlen(input);
 
 	for (exprbuf = strtok_r(buf, delim, &saveptr); exprbuf != NULL; exprbuf = strtok_r(NULL, delim, &saveptr)) {
-		dynamic_wlist_append(wl, exprbuf);
+		wlist_append(wl, exprbuf);
+	}
+
+	sa_free(buf);
+
+	return wl;
+}
+
+dynamic_wlist_t *tokenize_wr_delim_exclude(const char* input, const char* delim, const char* begstr) {
+	dynamic_wlist_t *wl = wlist_create();
+	char *exprbuf, *saveptr;
+
+	char *buf = sa_strdup(input);
+	size_t begstr_len = strlen(begstr);
+
+	for (exprbuf = strtok_r(buf, delim, &saveptr); exprbuf != NULL; exprbuf = strtok_r(NULL, delim, &saveptr)) {
+		size_t len = strlen(exprbuf);
+		if (len >= begstr_len) {
+			if (strncmp(exprbuf, begstr, begstr_len) != 0)
+				wlist_append(wl, exprbuf);
+		}
 	}
 
 	sa_free(buf);
@@ -101,7 +121,7 @@ dynamic_wlist_t *tokenize_wr_delim(const char* input, const char* delim) {
 
 
 dynamic_wlist_t *tokenize_wr_delim_tidy(const char* input, const char* delim) {
-	dynamic_wlist_t *wl = dynamic_wlist_create();
+	dynamic_wlist_t *wl = wlist_create();
 	char *exprbuf, *saveptr;
 
 	char *buf = sa_strdup(input);
@@ -110,7 +130,7 @@ dynamic_wlist_t *tokenize_wr_delim_tidy(const char* input, const char* delim) {
 
 	//for (exprbuf = strtok(buf, delim); exprbuf != NULL; exprbuf = strtok(NULL, delim)) {
 	for (exprbuf = strtok_r(buf, delim, &saveptr); exprbuf != NULL; exprbuf = strtok_r(NULL, delim, &saveptr)) {
-		dynamic_wlist_append(wl, tidy_string(exprbuf));
+		wlist_append(wl, tidy_string(exprbuf));
 	}
 
 	fprintf(stderr, "[info]: tokenize_wr_delim_tidy: tokens gathered: %d\n", (int)wl->num_items);
