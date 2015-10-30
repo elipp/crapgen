@@ -4,7 +4,6 @@
 #include <math.h>
 #include <errno.h>
 #include <time.h>
-#include <fftw3.h>
 #include <ctype.h>
 
 #include "utils.h"
