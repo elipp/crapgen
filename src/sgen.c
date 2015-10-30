@@ -855,39 +855,6 @@ int read_song(expression_t *arg, song_t *s, sgen_ctx_t *c) {
 	return 1;
 }
 
-static float *do_fftw_stuff(float *in, long num) {
-	fftwf_complex *fftwout;
-	float *fout;
-
-	fftwf_plan plan_backward;
-	fftwf_plan plan_forward;
-
-	long nc = (num/2)+1;
-
-	fftwout = fftwf_malloc(sizeof(fftwf_complex)*nc);
-	plan_forward = fftwf_plan_dft_r2c_1d(num, in, fftwout, FFTW_ESTIMATE);
-	fftwf_execute(plan_forward);
-
-	/*for (int i = 0; i < nc; ++i) {
-	  float x = (float)(nc-1)/(float)nc;
-
-	  fftwout[i][0] *= x;
-	  fftwout[i][1] *= x;
-	  }
-	 */
-
-	fout = fftwf_malloc(sizeof(float)*num);
-	plan_backward = fftwf_plan_dft_c2r_1d(num, fftwout, fout, FFTW_ESTIMATE);
-	fftwf_execute(plan_backward);
-
-	fftwf_destroy_plan(plan_forward);
-	fftwf_destroy_plan(plan_backward);
-
-	fftwf_free(fftwout);
-
-	return fout;
-}
-
 static int sgen_dump(output_t *output) {
 
 	static const char *outfname = "output_test.wav";

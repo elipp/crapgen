@@ -3,7 +3,7 @@ OBJDIR := objs
 CC := clang -O2 -Wall -g
 CFLAGS := -c 
 INCLUDE := -Isrc
-LIBS := -lm -lrt -lfftw3f
+LIBS := -lm -lrt 
 
 SOURCES=$(addprefix $(SRCDIR)/, waveforms.c string_allocator.c string_manip.c dynamic_wlist.c envelope.c utils.c track.c timer.c WAV.c)
 
