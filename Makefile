@@ -3,9 +3,9 @@ OBJDIR := objs
 CC := clang -O2 -Wall -g
 CFLAGS := -c 
 INCLUDE := -Isrc
-LIBS := -lm -lrt 
+LIBS := -lm 
 
-SOURCES=$(addprefix $(SRCDIR)/, waveforms.c string_allocator.c string_manip.c dynamic_wlist.c envelope.c utils.c track.c timer.c WAV.c)
+SOURCES=$(addprefix $(SRCDIR)/, waveforms.c string_allocator.c string_manip.c actions.c parse.c dynamic_wlist.c envelope.c utils.c track.c timer.c WAV.c)
 
 OBJECTS=$(patsubst $(SRCDIR)/%.c, $(OBJDIR)/%.o, $(SOURCES))
 

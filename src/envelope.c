@@ -9,23 +9,28 @@ static const float HALF_RAND_MAX = 0.5*(float)RAND_MAX;
 float randomfloat01() { return (float)rand()/(float)RAND_MAX; }
 float randomfloatminus1_1() { return (float)rand()/HALF_RAND_MAX - 1.0; }
 
-envelope_t default_envelope;
+envelope_t default_envelope = {
+	"default_envelope",
+	{ 1.0, 0.1, 0.1, 5, 0.1, 2 },
+	NULL,
+	-1	
+};
 
-envelope_t envelope_generate(char* name, float amplitude, float a, float d, float s, float sl, float r) {
+envelope_t envelope_generate(char* name, float amplitude, float A, float D, float S, float SL, float R) {
 
 	envelope_t e;
 	e.name = name;
-	float sum = a + d + s + r;
+	float sum = A + D + S + R;
 	// normalize parms
 
 	e.parms[ENV_AMPLITUDE] = amplitude;
-	e.parms[ENV_ATTACK] = a/sum;
-	e.parms[ENV_DECAY] = d/sum;
-	e.parms[ENV_SUSTAIN] = s/sum;
-	e.parms[ENV_SUSTAIN_LEVEL] = sl;
-	e.parms[ENV_RELEASE] = r/sum;
+	e.parms[ENV_ATTACK] = A/sum;
+	e.parms[ENV_DECAY] = D/sum;
+	e.parms[ENV_SUSTAIN] = S/sum;
+	e.parms[ENV_SUSTAIN_LEVEL] = SL;
+	e.parms[ENV_RELEASE] = R/sum;
 
-	printf("sgen: envelope_generate: id = %s, a = %f, d = %f, s = %f, sl = %f, r = %f\n", name, 
+	printf("sgen: envelope_generate: id = %s, A = %f, D = %f, S = %f, SL = %f, R = %f\n", name, 
 	e.parms[ENV_ATTACK], e.parms[ENV_DECAY], e.parms[ENV_SUSTAIN], e.parms[ENV_SUSTAIN_LEVEL], e.parms[ENV_RELEASE]);
 
 	return e;

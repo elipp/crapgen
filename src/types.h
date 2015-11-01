@@ -3,6 +3,7 @@
 
 #include <stdlib.h>
 
+
 struct sgen_ctx_t;
 
 typedef struct {
@@ -30,6 +31,7 @@ enum SGEN_ENV_PARMS {
 	ENV_SUSTAIN,
 	ENV_SUSTAIN_LEVEL,
 	ENV_RELEASE,
+	ENV_LEGATO,
 	ENV_NUM_PARMS
 };
 
@@ -41,7 +43,7 @@ enum ENVELOPE_MODES {
 
 typedef struct envelope_t { 
 	char *name;
-	float parms[6];
+	float parms[ENV_NUM_PARMS];
 	float *envelope;
 	int num_samples;
 } envelope_t; 
@@ -179,5 +181,12 @@ typedef struct sgen_ctx_t {
 	int num_songs;
 
 } sgen_ctx_t;
+
+typedef int (*keywordfunc)(expression_t*, sgen_ctx_t*);
+
+typedef struct { 
+	const char* keyword; 
+	keywordfunc action; 
+} keyword_action_pair_t; 
 
 #endif

@@ -1,6 +1,6 @@
 #ifndef ENVELOPE_H
 #define ENVELOPE_H
-
+	
 float randomfloat01();
 float randomfloatminus1_1();
 
