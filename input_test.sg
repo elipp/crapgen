@@ -7,7 +7,7 @@ duration 20;
 envelope envelope1(1.0, 0.1, 1, 50, 0.1, 2);
 envelope envelope2(1.0, 0.1, 8, 0.01, 0.1, 0.1);
 
-vibrato vibrato1(0.0005, 50);
+vibrato vibrato1(0.0002, 50);
 
 track track1(sound=noise, channel=l+r, loop=true, transpose=20, envelope=envelope1, eqtemp_steps=17) = {
 	1_8. 1_8 1_16

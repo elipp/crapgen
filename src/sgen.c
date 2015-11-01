@@ -67,8 +67,6 @@ int construct_sgen_ctx(input_t *input, sgen_ctx_t *c) {
 
 }
 
-
-
 static int sgen_dump(output_t *output) {
 
 	static const char *outfname = "output_test.wav";
@@ -100,6 +98,48 @@ static int sgen_dump(output_t *output) {
 
 }
 
+static size_t note_synthesize(note_t *n, float *samples, size_t num_samples_max) {
+
+	size_t num_samples_longest = 0;
+
+	float dt = 1.0/44100.0; // TODO: get samplerate from somewhere
+	float A = n->num_children > 0 ? 1.0 : 1.0; // (1.0/n->num_children) : 1.0;
+
+	if (n->num_children > 0) {
+		for (int i = 0; i < n->num_children; ++i) {
+			if (n->children[i].rest) continue; 
+			long num_samples_this = num_samples_max / n->children[i].value / 2;
+			num_samples_longest = num_samples_this > num_samples_longest ? num_samples_this : num_samples_longest;
+			vibrato_t *v = n->vibrato;
+			float time = 0;
+			for (long j = 0; j < num_samples_this; ++j) {
+				float ea = envelope_get_amplitude_noprecalculate(j, num_samples_this, n->env);
+				float tv = v ? v->width * sin(v->freq*time) : 0;
+				samples[j] += n->env->parms[ENV_AMPLITUDE]*A*ea*n->sound->wform(n->freq, time + tv, 0);
+				time += dt;
+			}
+		}
+	}
+
+	else {
+		if (!n->rest) {
+			long num_samples_this = num_samples_max / n->value / 2;
+			num_samples_longest = num_samples_this > num_samples_longest ? num_samples_this : num_samples_longest;
+			vibrato_t *v = n->vibrato;
+
+			float time = 0;
+			for (long j = 0; j < num_samples_this; ++j) {
+				float ea = envelope_get_amplitude_noprecalculate(j, num_samples_this, n->env);
+				float tv = v ? v->width * sin(v->freq*time) : 0;
+				samples[j] += n->env->parms[ENV_AMPLITUDE]*A*ea*n->sound->wform(n->freq, time + tv, 0);
+				time += dt;
+			}
+		}
+	}
+
+	return num_samples_longest;
+}
+
 static int track_synthesize(track_t *t, long num_samples_total, float *lbuf, float *rbuf) {
 
 	// perhaps add multi-threading to this, as in all tracks be synthesized simultaneously in threads
@@ -110,18 +150,20 @@ static int track_synthesize(track_t *t, long num_samples_total, float *lbuf, flo
 	if (!t->active) { return 0; }
 
 	float samplerate = 44100.0;	// get this from the output_t struct
-
-	long num_samples_max = samplerate*(60.0/t->bpm)*4; // the length of a whole note (semibreve)
+	
+	// the length of an infinitely dotted whole note (semibreve) is two whole notes
+	// (the series sum(1/n) n goes 1->inf has a limit of 2)
+	// although technically a legato (overlong) envelope of such a note could go over this limit..
+	long num_samples_max = samplerate*(60.0/t->bpm)*(4+4); 
 
 	long lbuf_offset = 0;
 	long rbuf_offset = 0;
 
 	int note_index = 0;
-	float freqs[64];
+	float freqs[CHORD_ELEMENTS_MAX]; 
 
 	float *n_samples = malloc(num_samples_max*sizeof(float));
 
-	double eqtemp_coef = pow(2, 1.0/t->eqtemp_steps);
 	long num_samples_prev = num_samples_max;
 
 	while (lbuf_offset < num_samples_total && rbuf_offset < num_samples_total) {
@@ -130,45 +172,11 @@ static int track_synthesize(track_t *t, long num_samples_total, float *lbuf, flo
 			else { note_index = 0; }
 		}
 
-		long num_samples_longest = 0;
 
 		note_t *n = &t->notes[note_index];
-
-		float dt = 1.0/samplerate;
-		float A = n->num_children > 0 ? 1.0 : 1.0;// (1.0/n->num_children) : 1.0;
-
-		freq_from_noteindex(n, t->transpose, eqtemp_coef, freqs);
 		memset(n_samples, 0x0, num_samples_prev*sizeof(float)); // memset previous samples to 0
 
-		if (n->num_children > 0) {
-			for (int i = 0; i < n->num_children; ++i) {
-				long num_samples_this = num_samples_max / n->children[i].value;
-				num_samples_longest = num_samples_this > num_samples_longest ? num_samples_this : num_samples_longest;
-				float time = 0;
-				for (long j = 0; j < num_samples_this; ++j) {
-					float ea = envelope_get_amplitude_noprecalculate(j, num_samples_this, n->env);
-					float tv = t->vibrato ? t->vibrato->width * sin(t->vibrato->freq*time) : 0;
-					n_samples[j] += n->env->parms[ENV_AMPLITUDE]*A*ea*t->sound.wform(freqs[i], time + tv, 0);
-					time += dt;
-				}
-			}
-		}
-
-		else {
-			//			if (n->pitch == 0) goto increment;
-
-			long num_samples_this = num_samples_max / n->value;
-			num_samples_longest = num_samples_this > num_samples_longest ? num_samples_this : num_samples_longest;
-
-			float time = 0;
-
-			for (long j = 0; j < num_samples_this; ++j) {
-				float ea = envelope_get_amplitude_noprecalculate(j, num_samples_this, n->env);
-				float tv = t->vibrato ? t->vibrato->width * sin(t->vibrato->freq*time) : 0;
-				n_samples[j] += n->env->parms[ENV_AMPLITUDE]*A*ea*t->sound.wform(freqs[0], time + tv, 0);
-				time += dt;
-			}
-		}
+		size_t num_samples_longest = note_synthesize(n, n_samples, num_samples_max);
 
 		long n_offset_l = lbuf_offset;
 		long n_offset_r = rbuf_offset;

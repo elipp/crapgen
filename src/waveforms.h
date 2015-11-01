@@ -4,7 +4,7 @@
 #include <stdlib.h>
 #include "types.h"
 
-int freq_from_noteindex(note_t* note, float transpose, float eqtemp_coef, float *freqarr);
+int get_freq(note_t* n, float eqtemp_coef);
 
 extern const sound_t sounds[];
 extern const size_t num_sounds;

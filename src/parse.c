@@ -25,15 +25,18 @@ dynamic_wlist_t *get_primitive_args(expression_t *prim_expr) {
 }
 
 
-static int map_notename_to_int(const char *notestr) {
+static int get_pitch(const char *notestr, note_t *note) {
 	
-	if (!notestr) return -1;
-	if (str_isall(notestr, &isdigit)) return str_to_int_b10(notestr); 
+	if (!notestr) return 0;
+	if (str_isall(notestr, &isdigit)) { 
+		note->pitch = str_to_int_b10(notestr);
+		return 1;
+	}
 
 //	size_t nlen = strlen(notestr);
 
 	char *note_lower = str_tolower(notestr);
-	if (!note_lower) return -1;
+	if (!note_lower) return 0;
 
 	char *n = &note_lower[0];
 	if (*n == 'h') *n = 'b'; // convert h to b
@@ -45,7 +48,6 @@ static int map_notename_to_int(const char *notestr) {
 
 	int base = -1;
 
-	// trusting on the compiler's ability to optimize this shit, will probably compile into a cute jump table :D
 	switch (*n) {
 		case 'c':
 			base = 0;
@@ -68,6 +70,10 @@ static int map_notename_to_int(const char *notestr) {
 		case 'b':
 			base = 11;
 			break;
+		case 'r':
+			note->pitch = 0;
+			note->rest = 1;
+			return 1;
 		default:
 			break;
 	}
@@ -88,8 +94,10 @@ static int map_notename_to_int(const char *notestr) {
 	}
 	else rval = base;
 
-	return rval;
-	
+	note->pitch = rval;
+	note->rest = 0;
+
+	return 1;
 }
 
 
@@ -227,7 +235,6 @@ static int parse_digit_note(const char *notestr, note_t *note, track_ctx_t *ctx)
 		return -1;
 	}
 
-
 	int transp = count_transposition(basestr);	
 	ctx->transpose += transp;
 
@@ -289,8 +296,8 @@ static int parse_musicinput_note(const char *notestr, note_t *note, track_ctx_t 
 		++i;
 	}
 
-	int pitchval = map_notename_to_int(basestr);
-	if (pitchval < 0) {
+
+	if (get_pitch(basestr, note) < 0) {
 		SGEN_ERROR("parse_note: syntax error: unresolved notename \"%s\"!\n", basestr);
 		return 0;
 	}
@@ -298,7 +305,7 @@ static int parse_musicinput_note(const char *notestr, note_t *note, track_ctx_t 
 
 	int transp = count_transposition(notestr);
 	ctx->transpose += transp; 
-	note->pitch = pitchval + ctx->transpose;
+	note->pitch += ctx->transpose; // the pitch has already been assigned in get_pitch
 
 	return 1;
 }
@@ -393,6 +400,11 @@ static int get_chord(note_t *note, char** cur_note, char** last_note, track_ctx_
 
 	int num_notes = (chord_end - chord_beg) + 1;
 
+	if (num_notes > CHORD_ELEMENTS_MAX) {
+		SGEN_WARNING("too many elements in chord (%d)! Truncating to %d.\n", num_notes, CHORD_ELEMENTS_MAX);
+		num_notes = CHORD_ELEMENTS_MAX;
+	}
+
 //	fprintf(stderr, "num_notes: %d\n", num_notes);
 
 	note->children = malloc(num_notes*sizeof(note_t));
@@ -419,27 +431,27 @@ static int get_chord(note_t *note, char** cur_note, char** last_note, track_ctx_
 		note->children[j].num_children = 0;
 		++j;
 	}
-	// CONSIDER: just removing the original '>' in-place, the note strings are useless after this stage anyway
 
 	size_t last_len = strlen(*chord_end);
-	char *last_dup_clean = strdup(*chord_end);
-	last_dup_clean[last_len-1] = '\0'; // remove the terminating '>' 
+	char *last = *chord_end;
 
-	if (!parse_note(last_dup_clean, &note->children[j], ctx)) {
-		// cleanup
-		free(last_dup_clean);
+	if (last[last_len-1] == '>') {
+		// this is conditional because if we were to have a chord with > CHORD_ELEMENTS_MAX elements, the
+		// chord would get truncated and the last one wouldn't have a '>' in it.
+		last[last_len-1] = '\0'; // remove the terminating '>'. 
+	} 
+
+	if (!parse_note(last, &note->children[j], ctx)) {
+		SGEN_ERROR("parse_note failed! note = \"%s\"\n", last);
 		return 0;
 	}
 
 	note->children[j].children = NULL;
 	note->children[j].num_children = 0;
 
-	free(last_dup_clean);
 	return num_notes;
 
 }
-
-
 
 
 static int lexsort_expression_cmpfunc(const void* ea, const void *eb) {
@@ -464,12 +476,11 @@ dynamic_wlist_t *get_relevant_lines(const char* input) {
 			if (strncmp(stripped, "//", 2) != 0) { wlist_append(wl, stripped); }
 		}
 		else {
-			// for completeness, even though an expression of length 1 is always invalid (except ";")
+			// for completeness, even though an expression of length 1 is almost always invalid (except ";")
 			wlist_append(wl, stripped);
 		}
 		sa_free(stripped);
 	}
-
 
 	sa_free(buf);
 
@@ -729,6 +740,11 @@ int read_track(expression_t *track_expr, track_t *t, sgen_ctx_t *c) {
 			t->notes[i].env = t->envelope;
 		}
 
+	}
+
+	float eqtemp_coef = pow(2, 1.0/t->eqtemp_steps);
+	for (int i = 0; i < t->num_notes; ++i) {
+		get_freq(&t->notes[i], eqtemp_coef);
 	}
 
 	printf("\n");

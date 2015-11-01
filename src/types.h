@@ -3,7 +3,6 @@
 
 #include <stdlib.h>
 
-
 struct sgen_ctx_t;
 
 typedef struct {
@@ -41,6 +40,8 @@ enum ENVELOPE_MODES {
 	ENV_RANDOM_PER_NOTE
 };
 
+#define CHORD_ELEMENTS_MAX 64
+
 typedef struct envelope_t { 
 	char *name;
 	float parms[ENV_NUM_PARMS];
@@ -70,9 +71,13 @@ struct note_t;
 typedef struct note_t {
 	struct note_t *children; // NULL for top level notes
 	int num_children;
-	int pitch;
-	float value; // relative duration. 1 for whole note, 2 for half note etc. (ex. a_4)
+	float pitch;
+	float freq;
+	int rest;
+	float value; // relative duration. 1 for whole note, 2 for half note etc. (ex. a4)
 	float duration_s;
+	vibrato_t *vibrato;
+	sound_t *sound;
 	envelope_t *env;
 } note_t;
 
