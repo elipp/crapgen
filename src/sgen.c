@@ -23,11 +23,11 @@
 static void dump_note_t(note_t *n) {
 	fprintf(stderr, "note: num_children = %d\n", n->num_children);
 	if (n->num_children == 0) {
-		fprintf(stderr, "(single) note pitch: %d\n", n->pitch);
+		fprintf(stderr, "(single) note pitch: %f\n", n->pitch);
 		return;
 	}	
 	for (int i = 0; i < n->num_children; ++i) {
-		fprintf(stderr, "(chord) value %d/%d: %d\n", i+1, n->num_children, n->children[i].pitch);
+		fprintf(stderr, "(chord) value %d/%d: %f\n", i+1, n->num_children, n->children[i].pitch);
 		//printf("(chord) value %d/%d: \n", i, n->num_values);
 	}
 	
@@ -106,6 +106,7 @@ static size_t note_synthesize(note_t *n, float *samples, size_t num_samples_max)
 	float A = n->num_children > 0 ? 1.0 : 1.0; // (1.0/n->num_children) : 1.0;
 
 	if (n->num_children > 0) {
+
 		for (int i = 0; i < n->num_children; ++i) {
 			if (n->children[i].rest) continue; 
 			long num_samples_this = num_samples_max / n->children[i].value / 2;
@@ -116,6 +117,7 @@ static size_t note_synthesize(note_t *n, float *samples, size_t num_samples_max)
 				float ea = envelope_get_amplitude_noprecalculate(j, num_samples_this, n->env);
 				float tv = v ? v->width * sin(v->freq*time) : 0;
 				samples[j] += n->env->parms[ENV_AMPLITUDE]*A*ea*n->sound->wform(n->freq, time + tv, 0);
+				//samples[j] += n->env->parms[ENV_AMPLITUDE]*A*ea*sin(6.25*n->freq*dt);
 				time += dt;
 			}
 		}
@@ -132,6 +134,7 @@ static size_t note_synthesize(note_t *n, float *samples, size_t num_samples_max)
 				float ea = envelope_get_amplitude_noprecalculate(j, num_samples_this, n->env);
 				float tv = v ? v->width * sin(v->freq*time) : 0;
 				samples[j] += n->env->parms[ENV_AMPLITUDE]*A*ea*n->sound->wform(n->freq, time + tv, 0);
+		//		samples[j] += n->env->parms[ENV_AMPLITUDE]*A*ea*sin(6.25*n->freq*dt);
 				time += dt;
 			}
 		}
@@ -160,7 +163,6 @@ static int track_synthesize(track_t *t, long num_samples_total, float *lbuf, flo
 	long rbuf_offset = 0;
 
 	int note_index = 0;
-	float freqs[CHORD_ELEMENTS_MAX]; 
 
 	float *n_samples = malloc(num_samples_max*sizeof(float));
 
@@ -171,7 +173,6 @@ static int track_synthesize(track_t *t, long num_samples_total, float *lbuf, flo
 			if (!t->loop) { break; }
 			else { note_index = 0; }
 		}
-
 
 		note_t *n = &t->notes[note_index];
 		memset(n_samples, 0x0, num_samples_prev*sizeof(float)); // memset previous samples to 0

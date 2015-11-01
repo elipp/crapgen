@@ -670,8 +670,8 @@ int read_track(expression_t *track_expr, track_t *t, sgen_ctx_t *c) {
 	t->reverse = 0;
 	t->inverse = 0;
 	t->eqtemp_steps = 12;	
-	t->sound = sounds[0];
-	t->envelope = &default_envelope;
+	t->sound = &sounds[0];
+	t->envelope = default_envelope;
 	t->envelope_mode = ENV_FIXED;
 	t->vibrato = NULL;
 
@@ -712,8 +712,7 @@ int read_track(expression_t *track_expr, track_t *t, sgen_ctx_t *c) {
 	}
 
 	if (t->envelope_mode == ENV_RANDOM_PER_TRACK) {
-		t->envelope = malloc(sizeof(envelope_t));
-		*t->envelope = random_envelope();
+		t->envelope = random_envelope();
 	}
 
 	wlist_destroy(args);
@@ -728,24 +727,27 @@ int read_track(expression_t *track_expr, track_t *t, sgen_ctx_t *c) {
 	t->notes = malloc(notelist->num_items * sizeof(note_t));
 	t->num_notes = notelist->num_items;
 
+	memset(t->notes, 0x0, t->num_notes * sizeof(note_t));
+
 	t->notes = convert_notestr_wlist_to_notelist(notelist, &t->num_notes);
 
 	if (!t->notes || t->num_notes < 1) return 0;
 
+	float eqtemp_coef = pow(2, 1.0/t->eqtemp_steps);
+
 	for (int i = 0; i < t->num_notes; ++i) {
+		get_freq(&t->notes[i], eqtemp_coef);
+		t->notes[i].sound = t->sound;
+		t->notes[i].vibrato = t->vibrato;
+
 		if (t->envelope_mode == ENV_RANDOM_PER_NOTE) {
 			t->notes[i].env = malloc(sizeof(envelope_t));
 			*t->notes[i].env = random_envelope();
 		} else {
-			t->notes[i].env = t->envelope;
+			t->notes[i].env = &t->envelope;
 		}
-
 	}
 
-	float eqtemp_coef = pow(2, 1.0/t->eqtemp_steps);
-	for (int i = 0; i < t->num_notes; ++i) {
-		get_freq(&t->notes[i], eqtemp_coef);
-	}
 
 	printf("\n");
 

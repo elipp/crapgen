@@ -11,6 +11,6 @@ float envelope_get_amplitude_noprecalculate(int snum, int num_samples, envelope_
 
 envelope_t random_envelope();
 
-extern envelope_t default_envelope;
+extern const envelope_t default_envelope;
 
 #endif

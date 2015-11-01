@@ -9,7 +9,7 @@ static const float HALF_RAND_MAX = 0.5*(float)RAND_MAX;
 float randomfloat01() { return (float)rand()/(float)RAND_MAX; }
 float randomfloatminus1_1() { return (float)rand()/HALF_RAND_MAX - 1.0; }
 
-envelope_t default_envelope = {
+const envelope_t default_envelope = {
 	"default_envelope",
 	{ 1.0, 0.1, 0.1, 5, 0.1, 2, 1 },
 	NULL,

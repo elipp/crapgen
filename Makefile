@@ -1,6 +1,6 @@
 SRCDIR := src
 OBJDIR := objs
-CC := clang -O2 -Wall -g
+CC := clang -Wall -g
 CFLAGS := -c 
 INCLUDE := -Isrc
 LIBS := -lm 

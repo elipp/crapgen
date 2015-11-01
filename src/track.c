@@ -38,7 +38,7 @@ static int track_sound_action(const char* val, track_t* t, sgen_ctx_t *c) {
 	for (int i = 0; i < num_sounds; ++i) {
 		if (strcmp(val, sounds[i].name) == 0) {
 			printf("track %s: found sound prop with val \"%s\"\n", t->name, val);
-			t->sound = sounds[i];
+			t->sound = &sounds[i];
 			found = 1;
 			break;
 		}
@@ -95,15 +95,14 @@ static int track_envelope_action(const char* val, track_t* t, sgen_ctx_t *c) {
 
 	else if (strcmp(val, "random-per-track") == 0) {
 		t->envelope_mode = ENV_RANDOM_PER_TRACK;
-		t->envelope = malloc(sizeof(envelope_t));
-		*t->envelope = random_envelope();
+		t->envelope = random_envelope();
 		return 1;
 	}
 
 	int found = 0;
 	for (int i = 0; i < c->num_envelopes; ++i) {
 		if (strcmp(val, c->envelopes[i].name) == 0) {
-			t->envelope = &c->envelopes[i];
+			t->envelope = c->envelopes[i];
 			found = 1;
 			printf("found envelope \"%s\" from list\n", val);
 			break;
