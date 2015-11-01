@@ -11,7 +11,7 @@ float randomfloatminus1_1() { return (float)rand()/HALF_RAND_MAX - 1.0; }
 
 envelope_t default_envelope = {
 	"default_envelope",
-	{ 1.0, 0.1, 0.1, 5, 0.1, 2 },
+	{ 1.0, 0.1, 0.1, 5, 0.1, 2, 1 },
 	NULL,
 	-1	
 };

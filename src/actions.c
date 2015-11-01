@@ -102,10 +102,10 @@ int envelope_action(expression_t *arg, sgen_ctx_t *c) {
 
 	float parms[ENV_NUM_PARMS];
 	
-	if (args->num_items < 6) {
-		SGEN_WARNING("expected exactly %d (ie. Amplitude [0;1], Attack, Decay, Sustain, Sustain Level [0;1] & Release) numeric arguments, got %d\n", ENV_NUM_PARMS, (int)args->num_items);
+	if (args->num_items < ENV_NUM_PARMS) {
+		SGEN_WARNING("expected %d (Amplitude [0;1], Attack, Decay, Sustain, Sustain Level [0;1], Release, Relative Length) numeric arguments, got %d\n", ENV_NUM_PARMS, (int)args->num_items);
 		for (int i = ENV_NUM_PARMS - args->num_items; i < ENV_NUM_PARMS; ++i) {
-			parms[i] = 1.0;
+			parms[i] = default_envelope.parms[i];
 		}
 	}
 	else {
