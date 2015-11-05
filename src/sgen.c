@@ -117,7 +117,6 @@ static size_t note_synthesize(note_t *n, float *samples, size_t num_samples_max)
 				float ea = envelope_get_amplitude_noprecalculate(j, num_samples_this, n->env);
 				float tv = v ? v->width * sin(v->freq*time) : 0;
 				samples[j] += n->env->parms[ENV_AMPLITUDE]*A*ea*n->sound->wform(n->freq, time + tv, 0);
-				//samples[j] += n->env->parms[ENV_AMPLITUDE]*A*ea*sin(6.25*n->freq*dt);
 				time += dt;
 			}
 		}
@@ -134,7 +133,6 @@ static size_t note_synthesize(note_t *n, float *samples, size_t num_samples_max)
 				float ea = envelope_get_amplitude_noprecalculate(j, num_samples_this, n->env);
 				float tv = v ? v->width * sin(v->freq*time) : 0;
 				samples[j] += n->env->parms[ENV_AMPLITUDE]*A*ea*n->sound->wform(n->freq, time + tv, 0);
-		//		samples[j] += n->env->parms[ENV_AMPLITUDE]*A*ea*sin(6.25*n->freq*dt);
 				time += dt;
 			}
 		}
@@ -176,6 +174,9 @@ static int track_synthesize(track_t *t, long num_samples_total, float *lbuf, flo
 
 		note_t *n = &t->notes[note_index];
 		memset(n_samples, 0x0, num_samples_prev*sizeof(float)); // memset previous samples to 0
+
+		fprintf(stderr, "%f %f %f %f %f %f\n", n->env->parms[0], n->env->parms[1], n->env->parms[2], n->env->parms[3], n->env->parms[4], n->env->parms[5]);
+
 
 		size_t num_samples_longest = note_synthesize(n, n_samples, num_samples_max);
 

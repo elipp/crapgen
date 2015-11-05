@@ -73,6 +73,8 @@ void envelope_destroy(envelope_t *env) {
 }
 
 float envelope_get_amplitude_noprecalculate(int snum, int num_samples, envelope_t *env) {
+
+
 	
 	float ns = (float)num_samples;
 	float sa = env->parms[ENV_ATTACK] * ns;
