@@ -4,8 +4,10 @@ duration 20;
 //sample sample1("sound.wav");
 //sound sound1(sound=sample1);
 
-envelope envelope1(1.0, 0.1, 1, 50, 0.1, 2);
-envelope envelope2(1.0, 0.1, 8, 0.01, 0.1, 0.1);
+// envelope args: Amplitude [0,1], Attack, Decay, Sustain, Sustain Level [0,1], Release, Legato (relative length. RL of 1 means duration as written)
+
+envelope envelope1(0.3, 0.1, 0.1, 0.8, 0.1, 0.5, 1.0);
+envelope envelope2(1.0, 0.1, 8, 0.01, 0.1, 0.1, 1.5);
 
 vibrato vibrato1(0.0002, 50);
 
@@ -21,7 +23,7 @@ track track3(sound=triangle, vibrato=vibrato1, channel=l+r, loop=true, transpose
 	<dis''# # # # # # #> <cis# # # #> <dis # # ## # # # #> <cis# ## #> <b,# # # #> <b# # # #> <a# # # # # # # # # #>
 };
 
-track track4(sound=triangle, channel=l+r, loop=true, transpose=20, envelope=envelope2) = {
+track track4(sound=triangle, channel=l+r, loop=true, transpose=20, envelope=default) = {
 	1_32 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30
 };
 
@@ -39,4 +41,5 @@ track track3(sound=triangle, channel=l+r, loop=true, transpose=20, envelope=enve
 //};
 //
 song song1() { track1, track2, track3, track4 };
+//song song1() { track3 };
 

@@ -673,8 +673,8 @@ int read_track(expression_t *track_expr, track_t *t, sgen_ctx_t *c) {
 	t->sound = &sounds[0];
 	t->envelope_mode = ENV_FIXED;
 	t->vibrato = NULL;
-//	memcpy(&t->envelope, &default_envelope, sizeof(default_envelope));
-	t->envelope = default_envelope;
+	t->envelope = ctx_get_envelope(c, "default");
+
 	if ((t->name = get_primitive_identifier(track_expr)) == NULL) { return 0; }
 
 	dynamic_wlist_t *args = get_primitive_args(track_expr);
@@ -702,6 +702,9 @@ int read_track(expression_t *track_expr, track_t *t, sgen_ctx_t *c) {
 				if (!ta->action(val, t, c)) return 0;
 			}
 		}
+
+//		fprintf(stderr, "debug: &t->envelope = %p, t->envelope.name = \"%s\"\n", &t->envelope, t->envelope.name);
+//		fprintf(stderr, "debug: envelope.parms: %f %f %f %f %f %f %f\n", t->envelope.parms[0], t->envelope.parms[1],  t->envelope.parms[2], t->envelope.parms[3], t->envelope.parms[4], t->envelope.parms[5], t->envelope.parms[6]);
 
 		sa_free(prop);
 		sa_free(val);
@@ -736,27 +739,30 @@ int read_track(expression_t *track_expr, track_t *t, sgen_ctx_t *c) {
 	float eqtemp_coef = pow(2, 1.0/t->eqtemp_steps);
 
 	for (int i = 0; i < t->num_notes; ++i) {
-		get_freq(&t->notes[i], eqtemp_coef); // get_freq is recursive, no looping needed
+		note_t *n = &t->notes[i];
+		get_freq(n, eqtemp_coef); // get_freq is recursive, no looping needed
 		
-		t->notes[i].sound = t->sound;
-		t->notes[i].vibrato = t->vibrato;
+		n->sound = t->sound;
+		n->vibrato = t->vibrato;
 
 		if (t->envelope_mode == ENV_RANDOM_PER_NOTE) {
-			t->notes[i].env = malloc(sizeof(envelope_t));
-			*t->notes[i].env = random_envelope();
+			n->env = random_envelope();
 		} else {
-			t->notes[i].env = &t->envelope;
+			n->env = t->envelope;
 		}
 
-		for (int j = 0; j < t->notes[i].num_children; j++) { 
-			t->notes[i].children[j].sound = t->sound;
-			t->notes[i].children[j].vibrato = t->vibrato;
+//		fprintf(stderr, "t->envelope = %p, t->notes[%d]->env = %p, &t->notes[%d]->env = %p\n", (void*)&t->envelope, i, (void*)n->env, i, (void*)&n->env);
+
+		for (int j = 0; j < n->num_children; j++) { 
+			note_t *child = &n->children[j];
+
+			child->sound = t->sound;
+			child->vibrato = t->vibrato;
 
 			if (t->envelope_mode == ENV_RANDOM_PER_NOTE) {
-				t->notes[i].children[j].env = malloc(sizeof(envelope_t));
-				*t->notes[i].children[j].env = random_envelope();
+				child->env = random_envelope();
 			} else {
-				t->notes[i].children[j].env = &t->envelope;
+				child->env = t->envelope;
 			}
 		}
 

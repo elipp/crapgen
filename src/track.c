@@ -102,7 +102,7 @@ static int track_envelope_action(const char* val, track_t* t, sgen_ctx_t *c) {
 	int found = 0;
 	for (int i = 0; i < c->num_envelopes; ++i) {
 		if (strcmp(val, c->envelopes[i].name) == 0) {
-			t->envelope = c->envelopes[i];
+			t->envelope = &c->envelopes[i];
 			found = 1;
 			printf("found envelope \"%s\" from list\n", val);
 			break;

@@ -4,13 +4,14 @@
 float randomfloat01();
 float randomfloatminus1_1();
 
-envelope_t envelope_generate(char* name, float amplitude, float a, float d, float s, float sl, float r);
+envelope_t *envelope_generate(char* name, float amplitude, float a, float d, float s, float sl, float r, float rl);
 float *envelope_precalculate(envelope_t *env, long num_samples, float samplerate);
 void envelope_destroy(envelope_t *env);
-float envelope_get_amplitude_noprecalculate(int snum, int num_samples, envelope_t *env);
+float envelope_get_amplitude_noprecalculate(int snum, int num_samples, const envelope_t *env);
 
-envelope_t random_envelope();
+envelope_t *random_envelope();
 
-extern const envelope_t default_envelope;
+envelope_t *ctx_get_envelope(sgen_ctx_t* ctx, const char* name);
+int ctx_add_envelope(sgen_ctx_t* ctx, envelope_t *env);
 
 #endif

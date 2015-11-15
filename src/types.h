@@ -76,9 +76,9 @@ typedef struct note_t {
 	int rest;
 	float value; // relative duration. 1 for whole note, 2 for half note etc. (ex. a4)
 	float duration_s;
-	vibrato_t *vibrato;
+	const vibrato_t *vibrato;
 	const sound_t *sound;
-	envelope_t *env;
+	const envelope_t *env;
 } note_t;
 
 typedef struct track_ctx_t {
@@ -103,9 +103,9 @@ typedef struct track_t {
 	float eqtemp_steps;
 	float duration_s;
 	const sound_t *sound;
-	envelope_t envelope;
+	const envelope_t *envelope;
 	int envelope_mode;
-	vibrato_t *vibrato;
+	const vibrato_t *vibrato;
 
 } track_t;
 

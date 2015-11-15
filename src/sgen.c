@@ -35,6 +35,10 @@ static void dump_note_t(note_t *n) {
 
 int construct_sgen_ctx(input_t *input, sgen_ctx_t *c) {
 
+	// add default envelope
+	envelope_t *default_envelope = envelope_generate("default", 1.0, 0.1, 0.1, 5, 0.1, 1.0, 1.0);
+	ctx_add_envelope(c, default_envelope);
+
 	for (int i = 0; i < input->num_active_exprs; ++i) {
 		expression_t *expriter = &input->exprs[i];
 
@@ -98,25 +102,31 @@ static int sgen_dump(output_t *output) {
 
 }
 
-static size_t note_synthesize(note_t *n, float *samples, size_t num_samples_max) {
+static size_t note_synthesize(note_t *n, float *samples, const size_t num_samples_max) {
 
 	size_t num_samples_longest = 0;
 
 	float dt = 1.0/44100.0; // TODO: get samplerate from somewhere
-	float A = n->num_children > 0 ? 1.0 : 1.0; // (1.0/n->num_children) : 1.0;
+	//float A = n->num_children > 0 ? 1.0 : 1.0;
+	float A = n->num_children > 0 ? (1.0/n->num_children) : 1.0;
 
 	if (n->num_children > 0) {
 
 		for (int i = 0; i < n->num_children; ++i) {
-			if (n->children[i].rest) continue; 
+
+	//	fprintf(stderr, "child %d envelope: %p = %f %f %f %f %f %f %f\n", 
+	// i, n->env, n->env->parms[0], n->env->parms[1],  n->env->parms[2], n->env->parms[3], n->env->parms[4], n->env->parms[5], n->env->parms[6]);
+			note_t *child = &n->children[i];
+			if (child->rest) continue; 
+			
 			long num_samples_this = num_samples_max / n->children[i].value / 2;
 			num_samples_longest = num_samples_this > num_samples_longest ? num_samples_this : num_samples_longest;
-			vibrato_t *v = n->vibrato;
+			const vibrato_t *v = n->vibrato;
 			float time = 0;
 			for (long j = 0; j < num_samples_this; ++j) {
-				float ea = envelope_get_amplitude_noprecalculate(j, num_samples_this, n->env);
+				float ea = envelope_get_amplitude_noprecalculate(j, num_samples_this, child->env);
 				float tv = v ? v->width * sin(v->freq*time) : 0;
-				samples[j] += n->env->parms[ENV_AMPLITUDE]*A*ea*n->sound->wform(n->freq, time + tv, 0);
+				samples[j] += child->env->parms[ENV_AMPLITUDE]*A*ea*child->sound->wform(child->freq, time + tv, 0);
 				time += dt;
 			}
 		}
@@ -124,9 +134,12 @@ static size_t note_synthesize(note_t *n, float *samples, size_t num_samples_max)
 
 	else {
 		if (!n->rest) {
+
+	//		fprintf(stderr, "(single note) envelope: %p = %f %f %f %f %f %f %f\n", 
+	// n->env, n->env->parms[0], n->env->parms[1],  n->env->parms[2], n->env->parms[3], n->env->parms[4], n->env->parms[5], n->env->parms[6]);
 			long num_samples_this = num_samples_max / n->value / 2;
 			num_samples_longest = num_samples_this > num_samples_longest ? num_samples_this : num_samples_longest;
-			vibrato_t *v = n->vibrato;
+			const vibrato_t *v = n->vibrato;
 
 			float time = 0;
 			for (long j = 0; j < num_samples_this; ++j) {
@@ -146,7 +159,7 @@ static int track_synthesize(track_t *t, long num_samples_total, float *lbuf, flo
 	// perhaps add multi-threading to this, as in all tracks be synthesized simultaneously in threads
 
 	printf("sgen: synthesizing track %s\n", t->name);
-	printf("props: loop = %d, active = %d, transpose = %d, channel = %d, bpm = %f\n", t->loop, t->active, t->transpose, t->channel, t->bpm);
+	printf("props: loop = %d, active = %d, transpose = %d, channel = %d, bpm = %f, envelope = %s\n", t->loop, t->active, t->transpose, t->channel, t->bpm, t->envelope->name);
 	printf("num_samples_total = %ld\n", num_samples_total);
 	if (!t->active) { return 0; }
 
@@ -174,8 +187,6 @@ static int track_synthesize(track_t *t, long num_samples_total, float *lbuf, flo
 
 		note_t *n = &t->notes[note_index];
 		memset(n_samples, 0x0, num_samples_prev*sizeof(float)); // memset previous samples to 0
-
-		fprintf(stderr, "%f %f %f %f %f %f\n", n->env->parms[0], n->env->parms[1], n->env->parms[2], n->env->parms[3], n->env->parms[4], n->env->parms[5]);
 
 
 		size_t num_samples_longest = note_synthesize(n, n_samples, num_samples_max);
@@ -239,6 +250,7 @@ static int song_synthesize(output_t *o, song_t *s) {
 			num_samples = s->duration_s*o->samplerate;
 		}
 		else num_samples = t->duration_s*o->samplerate;
+
 		track_synthesize(t, num_samples, lbuf, rbuf);
 	}
 
@@ -266,14 +278,14 @@ static int song_synthesize(output_t *o, song_t *s) {
 
 int main(int argc, char* argv[]) {
 
-	static const char* sgen_version = "0.01";
+	static const char* sgen_version = "0.02ö";
 
 	if (argc < 2) {
 		fprintf(stderr,"sgen: No input files. Exiting.\n");
 		return 0;
 	}
 
-	fprintf(stderr, "sgen-%s-perse. Written by Esa (2014).\n", sgen_version);
+	fprintf(stderr, "sgen-%s (aka crapgen). Written by Esa (2014-2015).\n", sgen_version);
 
 	srand(time(NULL));
 

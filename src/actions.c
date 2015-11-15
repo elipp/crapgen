@@ -24,7 +24,7 @@ static int song_action(expression_t *arg, sgen_ctx_t *c) {
 	return 1; 
 } 
 
-int track_action(expression_t *arg, sgen_ctx_t *c) { 
+static int track_action(expression_t *arg, sgen_ctx_t *c) { 
 
 	if (c->num_tracks == 0) { c->tracks = malloc(sizeof(track_t)); }
 	++c->num_tracks;
@@ -39,12 +39,12 @@ int track_action(expression_t *arg, sgen_ctx_t *c) {
 	return 1;
 }
 
-int sample_action(expression_t *arg, sgen_ctx_t *c) { 
+static int sample_action(expression_t *arg, sgen_ctx_t *c) { 
 	printf("sgen: sample: NYI! :/\n"); 
 	return 1; 
 }
 
-int tempo_action(expression_t *arg, sgen_ctx_t *c) { 
+static int tempo_action(expression_t *arg, sgen_ctx_t *c) { 
 
 	if (arg->wlist->num_items < 2) {
 		SGEN_ERROR("error while parsing tempo directive. Defaulting to 120.\n");
@@ -63,7 +63,7 @@ int tempo_action(expression_t *arg, sgen_ctx_t *c) {
 	return 1; 
 }
 
-int duration_action(expression_t *arg, sgen_ctx_t *c) { 
+static int duration_action(expression_t *arg, sgen_ctx_t *c) { 
 	if (arg->wlist->num_items < 2) {
 		SGEN_ERROR("invalid duration directive. Defaulting to 10 seconds.\n");
 		return 0;
@@ -79,54 +79,54 @@ int duration_action(expression_t *arg, sgen_ctx_t *c) {
 	return 1; 
 }
 
-int samplerate_action(expression_t *arg, sgen_ctx_t *c) { return 1; }
+static int samplerate_action(expression_t *arg, sgen_ctx_t *c) { return 1; }
 
-int envelope_action(expression_t *arg, sgen_ctx_t *c) { 
+static int envelope_action(expression_t *arg, sgen_ctx_t *c) { 
 
 	if (arg->wlist->num_items < 2) {
 		SGEN_ERROR("invalid envelope input.\n");
 		return 0;
 	}
-	if (c->num_envelopes < 1) { c->envelopes = malloc(sizeof(envelope_t)); }
-	++c->num_envelopes;
 
-	c->envelopes = realloc(c->envelopes, c->num_envelopes*sizeof(envelope_t));	// TODO: this sux, lazy as hell 
 	char *envname;
-
 	if ((envname = get_primitive_identifier(arg)) == NULL) { return 0; }
 
 	// parse args
-
 	dynamic_wlist_t *args = get_primitive_args(arg);
 	if (!args) return 0;
 
 	float parms[ENV_NUM_PARMS];
 	
+	if (args->num_items > ENV_NUM_PARMS) {
+		SGEN_WARNING("too many envelope args (expected %d - Amplitude [0;1], Attack, Decay, Sustain, Sustain Level [0;1], Release, Relative Length, got %ld)! Ignoring excessive arguments.\n", ENV_NUM_PARMS, args->num_items);
+		args->num_items = ENV_NUM_PARMS;
+	}
+
+	for (int i = 0; i < args->num_items; ++i) {
+		double o;
+		convert_string_to_double(args->items[i], &o);
+		parms[i] = o;
+	}
+
 	if (args->num_items < ENV_NUM_PARMS) {
-		SGEN_WARNING("expected %d (Amplitude [0;1], Attack, Decay, Sustain, Sustain Level [0;1], Release, Relative Length) numeric arguments, got %d\n", ENV_NUM_PARMS, (int)args->num_items);
+		SGEN_WARNING("expected %d (Amplitude [0;1], Attack, Decay, Sustain, Sustain Level [0;1], Release, Relative Length) numeric arguments, got %d (filling in missing ones from envelope \"default\").\n", ENV_NUM_PARMS, (int)args->num_items);
+		// fill in the missing args from the default envelope
+		envelope_t *default_envelope = ctx_get_envelope(c, "default");
 		for (int i = ENV_NUM_PARMS - args->num_items; i < ENV_NUM_PARMS; ++i) {
-			parms[i] = default_envelope.parms[i];
+			parms[i] = default_envelope->parms[i];
 		}
-	}
-	else {
-		for (int i = 0; i < ENV_NUM_PARMS; ++i) {
-			double o;
-			convert_string_to_double(args->items[i], &o);
-			parms[i] = o;
-		}
-	}
+	} 
 
 	printf("sgen: found custom envelope \"%s\"\n", envname);
-	envelope_t *e = malloc(sizeof(envelope_t));
-	*e = envelope_generate(envname, 0.1, parms[ENV_ATTACK], parms[ENV_DECAY], parms[ENV_SUSTAIN], parms[ENV_SUSTAIN_LEVEL], parms[ENV_RELEASE]);
+	envelope_t *e = envelope_generate(envname, parms[ENV_AMPLITUDE], parms[ENV_ATTACK], parms[ENV_DECAY], parms[ENV_SUSTAIN], parms[ENV_SUSTAIN_LEVEL], parms[ENV_RELEASE], parms[ENV_LEGATO]);
 	wlist_destroy(args);
 
-	c->envelopes[c->num_envelopes-1] = *e;
+	ctx_add_envelope(c, e);
 
 	return 1; 
 }
 
-int vibrato_action(expression_t *arg, sgen_ctx_t *c) { 
+static int vibrato_action(expression_t *arg, sgen_ctx_t *c) { 
 
 	vibrato_t v;
 
