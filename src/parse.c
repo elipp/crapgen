@@ -25,11 +25,12 @@ dynamic_wlist_t *get_primitive_args(expression_t *prim_expr) {
 }
 
 
-static int get_pitch(const char *notestr, note_t *note) {
+static int get_pitch(const char *notestr, note_t *note, track_ctx_t *ctx) {
 	
 	if (!notestr) return 0;
 	if (str_isall(notestr, &isdigit)) { 
 		note->pitch = str_to_int_b10(notestr);
+		ctx->prev_pitch = note->pitch;
 		return 1;
 	}
 
@@ -42,49 +43,59 @@ static int get_pitch(const char *notestr, note_t *note) {
 	if (*n == 'h') *n = 'b'; // convert h to b
 
 	if (*n < 'a' || *n > 'g') { 
-		SGEN_ERROR("map_notename_to_int: invalid notename: \"%s\"\n", notestr);
+		SGEN_ERROR("get_pitch: invalid notename: \"%s\"\n", notestr);
 		return -1;
 	}	
 
 	int base = -1;
+	int transp_base = -1;
 
 	switch (*n) {
 		case 'c':
 			base = 0;
+			transp_base = 1;
 			break;
 		case 'd':
 			base = 2;
+			transp_base = 2;
 			break;
 		case 'e':
 			base = 4;
+			transp_base = 3;
 			break;
 		case 'f':
 			base = 5;
+			transp_base = 4;
 			break;
 		case 'g':
 			base = 7;
+			transp_base = 5;
 			break;
 		case 'a':
 			base = 9;
+			transp_base = 6;
 			break;
 		case 'b':
 			base = 11;
+			transp_base = 7;
 			break;
 		case 'r':
 			note->pitch = 0;
 			note->rest = 1;
 			return 1;
 		default:
+			// this should be unreachable
+			return -1;
 			break;
 	}
 
 	int rval = 0;
 
 	if (strcmp(note_lower, "as") == 0) {
-		return 8;
+		rval = 8;
 	}
 	else if (strcmp(note_lower, "es") == 0) {
-		return 3;
+		rval = 3;
 	}
 	else if (strcmp(note_lower + 1, "is") == 0 || strcmp(note_lower + 1, "#") == 0) {
 		rval = base+1;
@@ -93,6 +104,18 @@ static int get_pitch(const char *notestr, note_t *note) {
 		rval = base-1;
 	}
 	else rval = base;
+
+	int interval = ctx->prev_transp_base - transp_base;
+	int sign = sgn(interval);
+
+	int n = ctx->prev_pitch/12;
+	int options[2] = { n*12 + rval, (n+1)*12 + rval };
+
+	if (abs(interval) > 3) { // larger than a fourth, the directions flip
+		sign *= -1;
+	}
+
+	int final_pitch = options[sign > 0 ? 0 : 1];
 
 	note->pitch = rval;
 	note->rest = 0;
@@ -740,6 +763,7 @@ int read_track(expression_t *track_expr, track_t *t, sgen_ctx_t *c) {
 
 	for (int i = 0; i < t->num_notes; ++i) {
 		note_t *n = &t->notes[i];
+		
 		get_freq(n, eqtemp_coef); // get_freq is recursive, no looping needed
 		
 		n->sound = t->sound;

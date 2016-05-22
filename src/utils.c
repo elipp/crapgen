@@ -117,3 +117,7 @@ long get_filesize(FILE *fp) {
 }
 
 
+int sgn(int n) {
+	return (n > 0) - (n < 0);
+}
+

@@ -285,7 +285,7 @@ int main(int argc, char* argv[]) {
 		return 0;
 	}
 
-	fprintf(stderr, "sgen-%s (aka crapgen). Written by Esa (2014-2015).\n", sgen_version);
+	fprintf(stdout, "sgen-%s (aka crapgen). Written by Esa (2014-2015).\n", sgen_version);
 
 	srand(time(NULL));
 
