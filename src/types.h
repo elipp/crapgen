@@ -83,9 +83,8 @@ typedef struct note_t {
 
 typedef struct track_ctx_t {
 	float value;
-	int transpose;
 	int prev_pitch;
-	int prev_notebase;
+	int prev_transp_base;
 } track_ctx_t;
 
 typedef struct track_t {

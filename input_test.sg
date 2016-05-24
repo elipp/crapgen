@@ -1,5 +1,5 @@
-tempo 30;
-duration 20;
+tempo 16;
+duration 60;
 
 //sample sample1("sound.wav");
 //sound sound1(sound=sample1);
@@ -7,16 +7,16 @@ duration 20;
 // envelope args: Amplitude [0,1], Attack, Decay, Sustain, Sustain Level [0,1], Release, Legato (relative length. RL of 1 means duration as written)
 
 envelope envelope1(0.3, 0.1, 0.1, 0.8, 0.1, 0.5, 1.0);
-envelope envelope2(1.0, 0.1, 8, 0.01, 0.1, 0.1, 1.5);
+envelope envelope2(0.9, 0.1, 8, 0.01, 0.1, 0.1, 1.5);
 
 vibrato vibrato1(0.0002, 50);
 
-track track1(sound=noise, channel=l+r, loop=true, transpose=20, envelope=envelope1, eqtemp_steps=17) = {
-	e32 fis b cis' d fis, e cis' b, fis d' cis
+track track1(sound=triangle, channel=l+r, loop=true, transpose=20, envelope=envelope2, eqtemp_steps=12) = {
+	e96 fis b cis d fis, e cis' b fis d' cis
 };
 
 track track2(sound=triangle, channel=l+r, loop=true, transpose=20, envelope=envelope2, eqtemp_steps=12) = {
-	e30 fis b cis' d fis, e cis' b, fis d' cis
+	e95 fis b cis d fis, e cis' b fis d' cis
 };
 
 song song1() { track1, track2 };

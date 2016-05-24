@@ -105,19 +105,31 @@ static int get_pitch(const char *notestr, note_t *note, track_ctx_t *ctx) {
 	}
 	else rval = base;
 
+
 	int interval = ctx->prev_transp_base - transp_base;
 	int sign = sgn(interval);
 
-	int n = ctx->prev_pitch/12;
-	int options[2] = { n*12 + rval, (n+1)*12 + rval };
+	printf("prev_pitch = %d, prev_transp_base = %d, rval = %d, transp_base = %d\ninterval: %d, sign = %d\n", ctx->prev_pitch, ctx->prev_transp_base, rval, transp_base, interval, sign);
 
-	if (abs(interval) > 3) { // larger than a fourth, the directions flip
-		sign *= -1;
+	int flip = abs(interval) > 3 ? 1 : 0;
+	sign = flip ? -sign : sign;
+
+	int p = ctx->prev_pitch;
+
+#define MOD(a,b) ((((a)%(b))+(b))%(b)) // this is supposed to work for negative numbers also
+
+	if (sign < 0) {
+		while (MOD(p,12) != rval) ++p;
+	} else {
+		while (MOD(p,12) != rval) --p;
 	}
 
-	int final_pitch = options[sign > 0 ? 0 : 1];
+	printf("p = %d\n", p);
 
-	note->pitch = rval;
+	ctx->prev_transp_base = transp_base;
+
+	note->pitch = p;
+	// note: the '',, transposition stuff is applied later, so ctx->prev_pitch is also updated later
 	note->rest = 0;
 
 	return 1;
@@ -259,13 +271,12 @@ static int parse_digit_note(const char *notestr, note_t *note, track_ctx_t *ctx)
 	}
 
 	int transp = count_transposition(basestr);	
-	ctx->transpose += transp;
 
 	// we know at this stage that the string can be (at least partially) strtod'd (because of validate_digit_note)
 
 	float pitch;
 	convert_string_to_float(basestr, &pitch);
-	note->pitch = pitch + ctx->transpose;
+	note->pitch = pitch + transp;
 
 	if (valuestr) {
 		if (!parse_value_string(valuestr, &note->value)) return 0;
@@ -311,6 +322,7 @@ static int parse_musicinput_note(const char *notestr, note_t *note, track_ctx_t 
 
 	basestr = substring(notestr, 0, i);
 
+	// scan transp interval [i:j] for invalid input
 	while (i < j) {
 		if (notestr[i] != ',' && notestr[i] != '\'') { 
 			SGEN_ERROR("syntax error: unknown char input \'%c\'!\n", notestr[i]);
@@ -320,15 +332,19 @@ static int parse_musicinput_note(const char *notestr, note_t *note, track_ctx_t 
 	}
 
 
-	if (get_pitch(basestr, note) < 0) {
+	if (get_pitch(basestr, note, ctx) < 0) {
 		SGEN_ERROR("parse_note: syntax error: unresolved notename \"%s\"!\n", basestr);
 		return 0;
 	}
 
 
 	int transp = count_transposition(notestr);
-	ctx->transpose += transp; 
-	note->pitch += ctx->transpose; // the pitch has already been assigned in get_pitch
+	note->pitch += transp; // the basic pitch has already been assigned in get_pitch
+	printf("final pitch (after transp): %f\n", note->pitch);
+
+	// TODO: i don't like this!! should be assigned in get_pitch, but that requires passing either
+	// the value of i, or the whole basestr to the function. 
+	ctx->prev_pitch = note->pitch; 
 
 	return 1;
 }
@@ -624,7 +640,8 @@ note_t *convert_notestr_wlist_to_notelist(dynamic_wlist_t *notestr_wlist, size_t
 
 	track_ctx_t ctx;
 	ctx.value = 4;
-	ctx.transpose = 0;
+	ctx.prev_pitch = 0;
+	ctx.prev_transp_base = 0;
 
 	while (cur_note < last_note) {
 		if (err) { break; }
@@ -764,7 +781,7 @@ int read_track(expression_t *track_expr, track_t *t, sgen_ctx_t *c) {
 	for (int i = 0; i < t->num_notes; ++i) {
 		note_t *n = &t->notes[i];
 		
-		get_freq(n, eqtemp_coef); // get_freq is recursive, no looping needed
+		get_freq(n, eqtemp_coef, t->transpose); // get_freq is recursive, no looping needed
 		
 		n->sound = t->sound;
 		n->vibrato = t->vibrato;

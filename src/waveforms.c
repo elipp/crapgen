@@ -58,15 +58,15 @@ const sound_t sounds[] = {
 
 const size_t num_sounds = sizeof(sounds)/sizeof(sounds[0]);
 
-int get_freq(note_t* n, float eqtemp_coef) {
+int get_freq(note_t* n, float eqtemp_coef, int transpose) {
 
 	static const float low_c = 32.7032;
 	if (n->num_children == 0) {
-		n->freq = low_c * pow(eqtemp_coef, n->pitch);
+		n->freq = low_c * pow(eqtemp_coef, n->pitch + transpose);
 	}
 	else {
 		for (int i = 0; i < n->num_children; ++i) {
-			get_freq(&n->children[i], eqtemp_coef);
+			get_freq(&n->children[i], eqtemp_coef, transpose);
 		}
 	}
 
