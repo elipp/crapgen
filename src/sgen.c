@@ -121,6 +121,8 @@ static size_t note_synthesize(note_t *n, float *samples, const size_t num_sample
 			
 			long num_samples_this = num_samples_max / n->children[i].value / 2;
 			num_samples_longest = num_samples_this > num_samples_longest ? num_samples_this : num_samples_longest;
+			double duration_s = (double)num_samples_this*dt;
+			printf("num_samples_this: %ld, duration_s = %f\n", num_samples_this, duration_s);
 			const vibrato_t *v = n->vibrato;
 			float time = 0;
 			for (long j = 0; j < num_samples_this; ++j) {
@@ -139,6 +141,8 @@ static size_t note_synthesize(note_t *n, float *samples, const size_t num_sample
 	// n->env, n->env->parms[0], n->env->parms[1],  n->env->parms[2], n->env->parms[3], n->env->parms[4], n->env->parms[5], n->env->parms[6]);
 			long num_samples_this = num_samples_max / n->value / 2;
 			num_samples_longest = num_samples_this > num_samples_longest ? num_samples_this : num_samples_longest;
+			double duration_s = (double)num_samples_this*dt;
+			printf("num_samples_this: %ld, duration_s = %f\n", num_samples_this, duration_s);
 			const vibrato_t *v = n->vibrato;
 
 			float time = 0;

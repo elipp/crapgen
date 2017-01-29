@@ -39,10 +39,11 @@ static int get_pitch(const char *notestr, note_t *note, track_ctx_t *ctx) {
 	char *note_lower = str_tolower(notestr);
 	if (!note_lower) return 0;
 
-	char *n = &note_lower[0];
-	if (*n == 'h') *n = 'b'; // convert h to b
+//	char *n = &note_lower[0];
+	char n = note_lower[0];
+	if (n == 'h') n = 'b'; // convert h to b
 
-	if (*n < 'a' || *n > 'g') { 
+	if ((n < 'a' || n > 'g') && n != 'r') { 
 		SGEN_ERROR("get_pitch: invalid notename: \"%s\"\n", notestr);
 		return -1;
 	}	
@@ -50,7 +51,7 @@ static int get_pitch(const char *notestr, note_t *note, track_ctx_t *ctx) {
 	int base = -1;
 	int transp_base = -1;
 
-	switch (*n) {
+	switch (n) {
 		case 'c':
 			base = 0;
 			transp_base = 1;
@@ -340,7 +341,7 @@ static int parse_musicinput_note(const char *notestr, note_t *note, track_ctx_t 
 
 	int transp = count_transposition(notestr);
 	note->pitch += transp; // the basic pitch has already been assigned in get_pitch
-	printf("final pitch (after transp): %f\n", note->pitch);
+//	printf("final pitch (after transp): %f\n", note->pitch);
 
 	// TODO: i don't like this!! should be assigned in get_pitch, but that requires passing either
 	// the value of i, or the whole basestr to the function. 
@@ -392,16 +393,29 @@ static int get_chord(note_t *note, char** cur_note, char** last_note, track_ctx_
 
 	// find note ending with '>'
 	while (cur_note <= last_note) {
+		char *cur = *cur_note;
+		size_t cur_len = strlen(cur);
 		char *loc;
-		if ((loc = strchr(*cur_note+1, '<')) != NULL) {
+		if ((loc = strchr(cur+1, '<')) != NULL) {
 			SGEN_ERROR("syntax error: (chord): found \'<\' inside \'<\' (chord nesting is not supported!) (note = \"%s\")\n", *cur_note);
 		}
 
-		if ((loc = strchr(*cur_note, '>')) != NULL) {
-			// check if '>' is actually the last character (which it should be)
-			if ((loc-(*cur_note)) != (strlen(*cur_note)) - 1) { 
-				SGEN_ERROR("syntax error: (chord): unexpected input after \'>\'!\n");
-				return -1; 
+		if ((loc = strchr(cur, '>')) != NULL) {
+			// check if '>' is actually the last character
+			int pos = loc-cur;
+			if (pos != (cur_len - 1)) { 
+				// see if the part after '>' has a valid numeric value in it
+				char *substr = substring(loc+1, 0, (cur_len - pos));
+				if (str_isall(substr, &isdigit)) {
+					chord_end = cur_note;
+					char *endptr;
+					note->value = strtold(substr, &endptr);
+					printf("found chord with value %f\n", note->value);
+					break;
+				} else {
+					SGEN_ERROR("syntax error: (chord): unexpected input after \'>\'!\n");
+					return -1; 
+				}
 			}
 			else  {
 //				fprintf(stderr, "debug: found suitable end note: \"%s\"\n", *cur_note);
@@ -454,6 +468,13 @@ static int get_chord(note_t *note, char** cur_note, char** last_note, track_ctx_
 		// cleanup, return error
 		SGEN_ERROR("parse_note failed! note = \"%s\"\n", (*chord_beg + 1));
 		return 0;
+	}
+
+	if (note->value != 0) {
+		// then a global value has been set for the chord
+		for (int i = 0; i < num_notes; ++i) {
+			note->children[i].value = note->value;
+		}
 	}
 
 	note->children[0].children = NULL;
@@ -630,6 +651,7 @@ note_t *convert_notestr_wlist_to_notelist(dynamic_wlist_t *notestr_wlist, size_t
 	// this is kinda wasteful, since there could be < > chords, but not too bad.
 	// might want to realloc shrink once we're done with the parsing
 	note_t *notes = malloc(notestr_wlist->num_items * sizeof(note_t));
+	memset(notes, 0x0, notestr_wlist->num_items*sizeof(note_t));
 
 	int err = 0;
 
