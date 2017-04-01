@@ -410,6 +410,8 @@ static int get_chord(note_t *note, char** cur_note, char** last_note, track_ctx_
 					chord_end = cur_note;
 					char *endptr;
 					note->value = strtold(substr, &endptr);
+					ctx->value = note->value;
+
 					printf("found chord with value %f\n", note->value);
 					break;
 				} else {
@@ -472,6 +474,7 @@ static int get_chord(note_t *note, char** cur_note, char** last_note, track_ctx_
 
 	if (note->value != 0) {
 		// then a global value has been set for the chord
+		printf("chord parent value != 0, setting all children to %f\n", note->value);
 		for (int i = 0; i < num_notes; ++i) {
 			note->children[i].value = note->value;
 		}

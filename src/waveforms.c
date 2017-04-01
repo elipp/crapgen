@@ -47,13 +47,25 @@ static float waveform_noise(float freq, float t, float phi) {
 	return randomfloatminus1_1();
 }
 
+static float waveform_noise_8bit(float freq, float t, float phi) {
+	int r = rand() % 256 - 128;
+	return (r/127.0);
+}
+
+static float waveform_noise_4bit(float freq, float t, float phi) {
+	int r = rand() % 16 - 8;
+	return (r/8.0);
+}
+
 const sound_t sounds[] = {
 	{ "default", waveform_sine },
 	{ "sine", waveform_sine },
 	{ "square", waveform_square },
 	{ "triangle", waveform_triangle },
 	{ "sawtooth", waveform_sawtooth },
-	{ "noise", waveform_noise }
+	{ "noise", waveform_noise },
+	{ "noise8", waveform_noise_8bit },
+	{ "noise4", waveform_noise_4bit },
 };
 
 const size_t num_sounds = sizeof(sounds)/sizeof(sounds[0]);

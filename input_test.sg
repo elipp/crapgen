@@ -1,5 +1,5 @@
-tempo 60;
-duration 60;
+tempo 160;
+duration 30;
 
 //sample sample1("sound.wav");
 //sound sound1(sound=sample1);
@@ -7,19 +7,74 @@ duration 60;
 // envelope args: Amplitude [0,1], Attack, Decay, Sustain, Sustain Level [0,1], Release, Legato (relative length. RL of 1 means duration as written)
 
 envelope envelope1(0.3, 0.1, 0.1, 0.8, 0.1, 0.5, 1.0);
-envelope envelope2(0.9, 0.1, 8, 0.01, 0.1, 0.1, 1.5);
+envelope envelope2(0.9, 0.1, 16, 0.01, 0.1, 0.5, 1.5);
+envelope envelope3(0.2, 0.1, 16, 0.8, 0.1, 0.2, 0.5);
 
 vibrato vibrato1(0.0002, 50);
 
-track track1(sound=triangle, channel=l+r, loop=true, transpose=20, envelope=envelope2, eqtemp_steps=12) = {
-	<f c' as' bes es>4 
-//	<g d' bes' c f>4 
-//	c4 d4 e4 r5
+track track1(sound=triangle, channel=l+r, loop=true, transpose=24, envelope=envelope2, eqtemp_steps=12) = {
+
+	<f c' as' bes es>8 r16 r8
+	<g, d' bes' c f>8 r8 r8 r16
+	<as, bes' c es g>8 r16
+	<as, bes' c es g>8 r16
+	<as, bes' c es g>8 r16 r8 r16
+
+	<bes, as' c es g>8 r16 r8
+	<b, b' d g bes>8 r8 r8 r16
+	<c bes' c d f>8 r16
+	<c bes' c d f>8 r16
+	<e g' c d g>8 r16 r8 r16
+
+	<f c' as' bes es>8 r16 r8
+	<g, d' bes' c f>8 r8 r8 r16
+	<a, g' b c e g>8 r16
+	<a, g' b c e g>8 r16
+	<a, g' b c e g>8 r16 r8 r16
+
+	<a, g' b c e g>8 r16 r8
+	<d g' b c e g b>8 r8 r8 r16
+
+	<g a' b d fis>8 r16
+	<g, a' b d fis>8 r16
+	<a, b' cis e gis>8 r16 r8 r16
+
+	<fis cis' a' b e>8 r16 r8
+	<gis, dis' b' cis fis>8 r8 r8 r16
+	<a, b' cis e gis>8 r16
+	<a, b' cis e gis>8 r16
+	<a, b' cis e gis>8 r16 r8 r16
+
+	<b, a' cis e gis>8 r16 r8
+	<c c' dis gis b>8 r8 r8 r16
+	<cis b' cis dis fis>8 r16
+	<cis' b' cis dis fis>8 r16
+	<eis gis' cis dis gis>8 r16 r8 r16
+
+	<fis cis' a' b e>8 r16 r8
+	<gis, dis' b' cis fis>8 r8 r8 r16
+
+	<bes, c' es as>8 r16
+	<bes, c' es as>8 r16
+	r10.66666666666
+	<f as' bes es g>8 r16
+	<f as' bes es g>8 r16
+	r10.66666666666
+	<bes, as' bes c es>8 r16
+	<bes as' bes c es>8 r16
+
+	r8 r16
+
+	<c bes' c d f>8 r16
+	<c bes' c d f>8 r16
+
+	<e g' c d g>8 r16 r8 r16 
 };
 
-//track track2(sound=triangle, channel=l+r, loop=true, transpose=20, envelope=envelope2, eqtemp_steps=12) = {
-//	a
-//};
 
-song song1() { track1 };
+track track2(sound=noise, channel=l+r, loop=true, transpose=20, envelope=envelope3, eqtemp_steps=12) = {
+	r8 r8 r8 c4 r8
+};
+
+song song1() { track1, track2 };
 

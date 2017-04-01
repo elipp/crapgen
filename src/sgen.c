@@ -114,21 +114,20 @@ static size_t note_synthesize(note_t *n, float *samples, const size_t num_sample
 
 		for (int i = 0; i < n->num_children; ++i) {
 
-	//	fprintf(stderr, "child %d envelope: %p = %f %f %f %f %f %f %f\n", 
-	// i, n->env, n->env->parms[0], n->env->parms[1],  n->env->parms[2], n->env->parms[3], n->env->parms[4], n->env->parms[5], n->env->parms[6]);
 			note_t *child = &n->children[i];
 			if (child->rest) continue; 
 			
 			long num_samples_this = num_samples_max / n->children[i].value / 2;
 			num_samples_longest = num_samples_this > num_samples_longest ? num_samples_this : num_samples_longest;
 			double duration_s = (double)num_samples_this*dt;
-			printf("num_samples_this: %ld, duration_s = %f\n", num_samples_this, duration_s);
+//			printf("num_samples_this: %ld, duration_s = %f\n", num_samples_this, duration_s);
 			const vibrato_t *v = n->vibrato;
 			float time = 0;
 			for (long j = 0; j < num_samples_this; ++j) {
 				float ea = envelope_get_amplitude_noprecalculate(j, num_samples_this, child->env);
 				float tv = v ? v->width * sin(v->freq*time) : 0;
-				samples[j] += child->env->parms[ENV_AMPLITUDE]*A*ea*child->sound->wform(child->freq, time + tv, 0);
+				float CA = child->env->parms[ENV_AMPLITUDE];
+				samples[j] += CA*A*ea*child->sound->wform(child->freq, time + tv, 0);
 				time += dt;
 			}
 		}
@@ -137,21 +136,23 @@ static size_t note_synthesize(note_t *n, float *samples, const size_t num_sample
 	else {
 		if (!n->rest) {
 
-	//		fprintf(stderr, "(single note) envelope: %p = %f %f %f %f %f %f %f\n", 
-	// n->env, n->env->parms[0], n->env->parms[1],  n->env->parms[2], n->env->parms[3], n->env->parms[4], n->env->parms[5], n->env->parms[6]);
 			long num_samples_this = num_samples_max / n->value / 2;
 			num_samples_longest = num_samples_this > num_samples_longest ? num_samples_this : num_samples_longest;
 			double duration_s = (double)num_samples_this*dt;
-			printf("num_samples_this: %ld, duration_s = %f\n", num_samples_this, duration_s);
+//			printf("num_samples_this: %ld, duration_s = %f\n", num_samples_this, duration_s);
 			const vibrato_t *v = n->vibrato;
 
 			float time = 0;
 			for (long j = 0; j < num_samples_this; ++j) {
 				float ea = envelope_get_amplitude_noprecalculate(j, num_samples_this, n->env);
 				float tv = v ? v->width * sin(v->freq*time) : 0;
-				samples[j] += n->env->parms[ENV_AMPLITUDE]*A*ea*n->sound->wform(n->freq, time + tv, 0);
+				float CA = n->env->parms[ENV_AMPLITUDE];
+				samples[j] += CA*A*ea*n->sound->wform(n->freq, time + tv, 0);
 				time += dt;
 			}
+		}
+		else {
+			return num_samples_max / n->value / 2;
 		}
 	}
 
@@ -192,8 +193,8 @@ static int track_synthesize(track_t *t, long num_samples_total, float *lbuf, flo
 		note_t *n = &t->notes[note_index];
 		memset(n_samples, 0x0, num_samples_prev*sizeof(float)); // memset previous samples to 0
 
-
 		size_t num_samples_longest = note_synthesize(n, n_samples, num_samples_max);
+		if (n->rest) goto addoffset;
 
 		long n_offset_l = lbuf_offset;
 		long n_offset_r = rbuf_offset;
@@ -216,6 +217,7 @@ static int track_synthesize(track_t *t, long num_samples_total, float *lbuf, flo
 			}
 		}
 
+addoffset:
 		lbuf_offset += num_samples_longest;
 		rbuf_offset += num_samples_longest;
 		++note_index;
