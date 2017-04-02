@@ -31,7 +31,8 @@ track track1(sound=triangle, channel=l+r, loop=true, transpose=24, envelope=enve
 };
 
 track track2(sound=noise, channel=l+r, loop=true, transpose=20, envelope=envelope3, eqtemp_steps=12) = {
-        r8 r8 r8 c4 r8
+        r8 r8 r8 c4 r8    
+
 };
 
 song song1() { track1, track2 };

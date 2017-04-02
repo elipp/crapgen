@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <execinfo.h>
+#include "types.h"
 
 #define SGEN_ERROR(fmt, ...) do {\
 	fprintf(stderr, "sgen: %s (@%s:%d) error: " fmt, __func__, __FILE__,  __LINE__, ## __VA_ARGS__);\
@@ -27,5 +28,9 @@ int find_stuff_between(char beg, char end, char* input, char** output);
 long get_filesize(FILE *fp);
 
 int sgn(int n);
+
+void note_inherit_value_from_parent(note_t *note);
+void note_disinherit(note_t *note);
+void note_disinherit_all(note_t *note);
 
 #endif

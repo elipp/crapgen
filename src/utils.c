@@ -121,3 +121,20 @@ int sgn(int n) {
 	return (n > 0) - (n < 0);
 }
 
+void note_inherit_value_from_parent(note_t *note) {
+	for (int i = 0; i < note->num_children; ++i) {
+		note->children[i].value = note->value;
+	}
+}
+
+void note_disinherit(note_t *note) {
+	note->children = NULL;
+	note->num_children = 0;
+}
+
+void note_disinherit_all(note_t *note) {
+	for (int i = 0; i < note->num_children; ++i) {
+		note_disinherit(&note->children[i]);
+	}
+}
+

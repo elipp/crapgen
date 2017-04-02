@@ -411,9 +411,12 @@ static int get_chord(note_t *note, char** cur_note, char** last_note, track_ctx_
 
 	// we can't skip the current note, since it might have the terminating '>' in it, e.g. <ais>
 
+	note->value = ctx->value;
+
 	// find note ending with '>'
 	while (cur_note <= last_note) {
 		char *cur = *cur_note;
+		if (!cur) { SGEN_ERROR("syntax error: (probably) stray \'<\' in source file!\n"); return -1; }
 		size_t cur_len = strlen(cur);
 		char *loc;
 		if ((loc = strchr(cur+1, '<')) != NULL) {
@@ -428,6 +431,7 @@ static int get_chord(note_t *note, char** cur_note, char** last_note, track_ctx_
 			if (pos <= (cur_len - 1)) { 
 				// see if the part after '>' has a valid numeric value in it
 				char *valuestr = substring(loc+1, 0, (cur_len - pos));
+				if (!valuestr) { SGEN_ERROR("syntax error: valuestr was NULL!\n"); return -1; }
 				if (parse_value_string(valuestr, &note->value)) {
 					printf("found chord value %f\n", note->value);
 					ctx_update_value(ctx, note->value);
@@ -459,12 +463,7 @@ static int get_chord(note_t *note, char** cur_note, char** last_note, track_ctx_
 
 
 	if (cur_note == chord_beg) {
-
 		// do just a regular single note parse
-		// we have previously established that the last char is '>', then just remove it
-
-		size_t len = strlen(*cur_note);
-		(*cur_note)[len-1] = '\0'; 
 		if (!parse_note((*chord_beg + 1), note, ctx)) {
 			SGEN_ERROR("parse_note failed! note = \"%s\"\n", (*chord_beg + 1));
 			return 0;
@@ -493,22 +492,15 @@ static int get_chord(note_t *note, char** cur_note, char** last_note, track_ctx_
 	note->num_children = num_notes;
 
 	// exclude the beginning '<' from the first notename
-	if (!parse_note((*chord_beg + 1), &note->children[0], ctx)) {
+	char *first = *chord_beg + 1;
+	if (!parse_note(first, &note->children[0], ctx)) {
 		// cleanup, return error
-		SGEN_ERROR("parse_note failed! note = \"%s\"\n", (*chord_beg + 1));
+		SGEN_ERROR("parse_note failed! note = \"%s\"\n", first);
 		return 0;
 	}
 
-	if (note->value != 0) {
-		// then a global value has been set for the chord
-		printf("chord parent value != 0, setting all children to %f\n", note->value);
-		for (int i = 0; i < num_notes; ++i) {
-			note->children[i].value = note->value;
-		}
-	}
-
-	note->children[0].children = NULL;
-	note->children[0].num_children = 0;
+	note_inherit_value_from_parent(note);
+	note_disinherit_all(note); // because individual notes in a chord can't have children
 
 	int j = 1;
 	while (j < num_notes - 1) {
@@ -517,8 +509,6 @@ static int get_chord(note_t *note, char** cur_note, char** last_note, track_ctx_
 			SGEN_ERROR("parse_note failed! note = \"%s\"\n", (*chord_beg + j));
 			return 0;
 		}
-		note->children[j].children = NULL;
-		note->children[j].num_children = 0;
 		++j;
 	}
 
@@ -535,9 +525,6 @@ static int get_chord(note_t *note, char** cur_note, char** last_note, track_ctx_
 		SGEN_ERROR("parse_note failed! note = \"%s\"\n", last);
 		return 0;
 	}
-
-	note->children[j].children = NULL;
-	note->children[j].num_children = 0;
 
 	return num_notes;
 
@@ -724,8 +711,7 @@ note_t *convert_notestr_wlist_to_notelist(dynamic_wlist_t *notestr_wlist, size_t
 				SGEN_ERROR("parse_note returned 0!\n");
 				err = 1; break;
 			}
-			notes[n].children = NULL;
-			notes[n].num_children = 0;
+			note_disinherit(&notes[n]);
 		}
 
 		++n;
