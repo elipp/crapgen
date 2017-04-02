@@ -578,8 +578,9 @@ int file_get_active_expressions(const char* filename, input_t *input) {
 	input->filename = sa_strdup(filename);
 	input->filesize = get_filesize(fp);
 
-	char *raw_buf = malloc(input->filesize);	// allocate this dynamically, don't use sa string pool
+	char *raw_buf = malloc(input->filesize + 1);	// allocate this dynamically, don't use sa string pool
 	fread(raw_buf, 1, input->filesize, fp);
+	raw_buf[input->filesize] = '\0'; 
 
 	fclose(fp);
 
@@ -601,6 +602,7 @@ int file_get_active_expressions(const char* filename, input_t *input) {
 	wlist_destroy(exprs_wlist);
 	input->exprs = exprs;
 	input->num_active_exprs = exprs_wlist->num_items;
+
 
 	// didn't even know this existed in the c stdlib
 	//qsort(input->exprs, input->num_active_exprs, sizeof(*input->exprs), lexsort_expression_cmpfunc);

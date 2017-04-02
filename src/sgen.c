@@ -42,6 +42,7 @@ int construct_sgen_ctx(input_t *input, sgen_ctx_t *c) {
 	for (int i = 0; i < input->num_active_exprs; ++i) {
 		expression_t *expriter = &input->exprs[i];
 
+//		wlist_print(expriter->wlist);
 		char *w = expriter->wlist->items[0];
 		if (w && w[0] == '/' && w[1] == '/') continue; // ignore comments
 

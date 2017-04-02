@@ -14,20 +14,7 @@ vibrato vibrato1(0.0002, 50);
 
 track track1(sound=triangle, channel=l+r, loop=true, transpose=24, envelope=envelope2, eqtemp_steps=12) = {
 
-	<# # # # # # # # #>#
-	<# # # # # # # # #>#
-	<# # # # # # # # #>#
-	<# # # # # # # # #>#
-	<# # # # # # # # #>#
-	<# # # # # # # # #>#
-	<# # # # # # # # #>#
-	<# # # # # # # # #>#
-	<# # # # # # # # #>#
-	<# # # # # # # # #>#
-	<# # # # # # # # #>#
-	<# # # # # # # # #>#
-	<# # # # # # # # #>#
-	<# # # # # # # # #>#
+	r3. a3...
 };
 
 track track2(sound=noise, channel=l+r, loop=true, transpose=20, envelope=envelope3, eqtemp_steps=12) = {
