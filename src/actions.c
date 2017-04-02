@@ -157,6 +157,21 @@ static int vibrato_action(expression_t *arg, sgen_ctx_t *c) {
 	return 1;
 }
 
+keywordfunc get_matching_action(const char* w) {
+
+	int unknown = 1;
+	for (int i = 0; i < num_keyword_action_pairs; ++i) {
+		if (strcmp(w, keyword_action_pairs[i].keyword) == 0){
+			return keyword_action_pairs[i].action;
+		}
+	}
+
+	SGEN_ERROR("sgen: error: unknown keyword \"%s\"!\n", w); // fix weird error
+	return NULL;
+
+}
+
+
 const keyword_action_pair_t keyword_action_pairs[] = { 
 
 { "song", song_action}, 

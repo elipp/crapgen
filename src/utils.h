@@ -5,11 +5,11 @@
 #include <stdlib.h>
 
 #define SGEN_ERROR(fmt, ...) do {\
-	fprintf(stderr, "sgen: %s: error: " fmt, __func__, ## __VA_ARGS__);\
+	fprintf(stderr, "sgen: %s (@%s:%d) error: " fmt, __func__, __FILE__,  __LINE__, ## __VA_ARGS__);\
 	} while (0)
 
 #define SGEN_WARNING(fmt, ...) do {\
-	printf("sgen: %s: warning: " fmt, __func__, ## __VA_ARGS__);\
+	printf("sgen: %s (@%s:%d) warning: " fmt, __func__, __FILE__, __LINE__, ## __VA_ARGS__);\
 	} while (0)
 
 int convert_string_to_float(const char* str, float *out);

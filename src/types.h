@@ -168,6 +168,8 @@ typedef struct track_prop_action_t {
 	PFNTRACKPROPACTION action;
 } track_prop_action_t;
 
+typedef PFNTRACKPROPACTION propfunc_t;
+
 typedef struct sgen_ctx_t {
 	// primitives
 

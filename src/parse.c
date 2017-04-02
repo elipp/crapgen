@@ -1,5 +1,9 @@
 #include "parse.h" 
 
+static void ctx_update_value(track_ctx_t *ctx, double value) {
+	ctx->value = value;
+}
+
 char* get_primitive_identifier(expression_t *track_expr) {
 	char* index = NULL;
 
@@ -98,11 +102,22 @@ static int get_pitch(const char *notestr, note_t *note, track_ctx_t *ctx) {
 	else if (strcmp(note_lower, "es") == 0) {
 		rval = 3;
 	}
+
 	else if (strcmp(note_lower + 1, "is") == 0 || strcmp(note_lower + 1, "#") == 0) {
-		rval = base+1;
+		if (n == 'b') {
+			rval = 0; // because the modulo of rval can't go over 12 :)
+		}
+		else {
+			rval = base+1;
+		}
 	}
 	else if (strcmp(note_lower + 1, "es") == 0 || strcmp(note_lower + 1, "b") == 0) {
-		rval = base-1;
+		if (n == 'c') {
+			rval = 11;
+		}
+		else {
+			rval = base-1;
+		}
 	}
 	else rval = base;
 
@@ -231,11 +246,11 @@ static int parse_random(const char *notestr, note_t *note, track_ctx_t *ctx) {
 	if (len > 1) {
 		if (notestr[1] == '#') {
 			note->value = rand() % 40; 
-			ctx->value = note->value;
+			ctx_update_value(ctx, note->value);
 		}
 		else { 
 			convert_string_to_float(notestr+1, &note->value);
-			ctx->value = note->value;
+			ctx_update_value(ctx, note->value);
 		}
 	} else {
 		note->value = ctx->value;
@@ -282,7 +297,7 @@ static int parse_digit_note(const char *notestr, note_t *note, track_ctx_t *ctx)
 	if (valuestr) {
 		if (!parse_value_string(valuestr, &note->value)) return 0;
 		// make new value the current value :P
-		ctx->value = note->value;
+		ctx_update_value(ctx, note->value);
 	} else {
 		note->value = ctx->value;
 	}
@@ -343,7 +358,7 @@ static int parse_musicinput_note(const char *notestr, note_t *note, track_ctx_t 
 	note->pitch += transp; // the basic pitch has already been assigned in get_pitch
 //	printf("final pitch (after transp): %f\n", note->pitch);
 
-	// TODO: i don't like this!! should be assigned in get_pitch, but that requires passing either
+	// TODO: this is crap! should be assigned in get_pitch, but that requires passing either
 	// the value of i, or the whole basestr to the function. 
 	ctx->prev_pitch = note->pitch; 
 
@@ -398,6 +413,7 @@ static int get_chord(note_t *note, char** cur_note, char** last_note, track_ctx_
 		char *loc;
 		if ((loc = strchr(cur+1, '<')) != NULL) {
 			SGEN_ERROR("syntax error: (chord): found \'<\' inside \'<\' (chord nesting is not supported!) (note = \"%s\")\n", *cur_note);
+			return -1;
 		}
 
 		if ((loc = strchr(cur, '>')) != NULL) {
@@ -405,14 +421,12 @@ static int get_chord(note_t *note, char** cur_note, char** last_note, track_ctx_
 			int pos = loc-cur;
 			if (pos != (cur_len - 1)) { 
 				// see if the part after '>' has a valid numeric value in it
-				char *substr = substring(loc+1, 0, (cur_len - pos));
-				if (str_isall(substr, &isdigit)) {
-					chord_end = cur_note;
-					char *endptr;
-					note->value = strtold(substr, &endptr);
-					ctx->value = note->value;
-
+				char *valuestr = substring(loc+1, 0, (cur_len - pos));
+				printf("valuestr: %s\n", valuestr);
+				if (parse_value_string(valuestr, &note->value)) {
 					printf("found chord with value %f\n", note->value);
+					ctx_update_value(ctx, note->value);
+                                      	chord_end = cur_note;
 					break;
 				} else {
 					SGEN_ERROR("syntax error: (chord): unexpected input after \'>\'!\n");
@@ -425,16 +439,16 @@ static int get_chord(note_t *note, char** cur_note, char** last_note, track_ctx_
 				break;
 
 			}
-		}
-
+		} 
 		++cur_note;
 	}
 
-	if (cur_note == NULL || cur_note == last_note) {
-		// don't know if this is actually reachable
-		SGEN_ERROR("syntax error: (chord) no corresponding \'>\' encountered!\n");
+	// TODO FIGURE OUT A WAY TO DETECT STRAY '<' or '>' s
+	if (cur_note >= last_note) {
+		SGEN_ERROR("syntax error: (chord): stray \'<\' in input!\n");
 		return -1;
 	}
+
 
 	if (cur_note == chord_beg) {
 
@@ -454,6 +468,11 @@ static int get_chord(note_t *note, char** cur_note, char** last_note, track_ctx_
 	// construct chord
 
 	int num_notes = (chord_end - chord_beg) + 1;
+
+	if (num_notes <= 0) {
+		SGEN_ERROR("number of chord notes <= 0!\n");
+		return 0;
+	}
 
 	if (num_notes > CHORD_ELEMENTS_MAX) {
 		SGEN_WARNING("too many elements in chord (%d)! Truncating to %d.\n", num_notes, CHORD_ELEMENTS_MAX);
@@ -687,7 +706,7 @@ note_t *convert_notestr_wlist_to_notelist(dynamic_wlist_t *notestr_wlist, size_t
 			if (num_notes > 0) {
 				cur_note += num_notes - 1;
 			} else {
-				SGEN_ERROR("get_chord returned <= 0! cur_note: \"%s\"\n", *cur_note);
+				SGEN_ERROR("get_chord returned %d! cur_note: \"%s\"\n", num_notes, *cur_note);
 				err = 1; break;
 			}
 		} 
@@ -705,10 +724,8 @@ note_t *convert_notestr_wlist_to_notelist(dynamic_wlist_t *notestr_wlist, size_t
 	}
 
 
-
 	if (err) {
 		free(notes);
-		notes = NULL;
 		return NULL;
 	}
 

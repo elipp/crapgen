@@ -43,20 +43,14 @@ int construct_sgen_ctx(input_t *input, sgen_ctx_t *c) {
 		expression_t *expriter = &input->exprs[i];
 
 		char *w = expriter->wlist->items[0];
-		if (w[0] == '/' && w[1] == '/') continue; // ignore comments
+		if (w && w[0] == '/' && w[1] == '/') continue; // ignore comments
 
-		int unknown = 1;
-		for (int i = 0; i < num_keyword_action_pairs; ++i) {
-			if (strcmp(w, keyword_action_pairs[i].keyword) == 0){
-				if (!keyword_action_pairs[i].action(expriter, c)) { return 0; }
-				unknown = 0;
-				break;
-			}
-		}
-		if (unknown) {
-			SGEN_ERROR("sgen: error: unknown keyword \"%s\"!\n", w); // fix weird error
-			wlist_print(expriter->wlist);
-			return 0;
+		keywordfunc action = get_matching_action(w);
+		
+		if (action) action(expriter, c);
+
+		else {
+			return -1;
 		}
 
 	}
@@ -119,9 +113,8 @@ static size_t note_synthesize(note_t *n, float *samples, const size_t num_sample
 			
 			long num_samples_this = num_samples_max / n->children[i].value / 2;
 			num_samples_longest = num_samples_this > num_samples_longest ? num_samples_this : num_samples_longest;
-			double duration_s = (double)num_samples_this*dt;
-//			printf("num_samples_this: %ld, duration_s = %f\n", num_samples_this, duration_s);
 			const vibrato_t *v = n->vibrato;
+
 			float time = 0;
 			for (long j = 0; j < num_samples_this; ++j) {
 				float ea = envelope_get_amplitude_noprecalculate(j, num_samples_this, child->env);
@@ -138,8 +131,7 @@ static size_t note_synthesize(note_t *n, float *samples, const size_t num_sample
 
 			long num_samples_this = num_samples_max / n->value / 2;
 			num_samples_longest = num_samples_this > num_samples_longest ? num_samples_this : num_samples_longest;
-			double duration_s = (double)num_samples_this*dt;
-//			printf("num_samples_this: %ld, duration_s = %f\n", num_samples_this, duration_s);
+
 			const vibrato_t *v = n->vibrato;
 
 			float time = 0;
@@ -253,9 +245,9 @@ static int song_synthesize(output_t *o, song_t *s) {
 		if (t->loop) num_samples = s->duration_s*o->samplerate;
 		else if (t->duration_s > s->duration_s) {
 			SGEN_WARNING("track duration is longer than song duration, truncating!\n");
-			num_samples = s->duration_s*o->samplerate;
+			num_samples = s->duration_s * o->samplerate;
 		}
-		else num_samples = t->duration_s*o->samplerate;
+		else num_samples = t->duration_s * o->samplerate;
 
 		track_synthesize(t, num_samples, lbuf, rbuf);
 	}
@@ -284,14 +276,14 @@ static int song_synthesize(output_t *o, song_t *s) {
 
 int main(int argc, char* argv[]) {
 
-	static const char* sgen_version = "0.02ö";
+	static const char* sgen_version = "0.02.1";
 
 	if (argc < 2) {
 		fprintf(stderr,"sgen: No input files. Exiting.\n");
 		return 0;
 	}
 
-	fprintf(stdout, "sgen-%s (aka crapgen). Written by Esa (2014-2015).\n", sgen_version);
+	fprintf(stdout, "sgen-%s (aka crapgen). Written by E (2014-2017).\n", sgen_version);
 
 	srand(time(NULL));
 

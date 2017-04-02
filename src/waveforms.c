@@ -49,12 +49,12 @@ static float waveform_noise(float freq, float t, float phi) {
 
 static float waveform_noise_8bit(float freq, float t, float phi) {
 	int r = rand() % 256 - 128;
-	return (r/127.0);
+	return (r/127);
 }
 
 static float waveform_noise_4bit(float freq, float t, float phi) {
 	int r = rand() % 16 - 8;
-	return (r/8.0);
+	return (r/8);
 }
 
 const sound_t sounds[] = {
