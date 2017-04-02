@@ -47,11 +47,8 @@ int construct_sgen_ctx(input_t *input, sgen_ctx_t *c) {
 
 		keywordfunc action = get_matching_action(w);
 		
-		if (action) action(expriter, c);
-
-		else {
-			return -1;
-		}
+		if (!action) return -1;
+              	if (!action(expriter, c)) return -1;
 
 	}
 

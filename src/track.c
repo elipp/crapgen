@@ -150,7 +150,7 @@ static int track_unknown_action(const char* val, track_t *t, sgen_ctx_t *c) {
 }
 
 
-const track_prop_action_t track_prop_actions[] = {
+static const track_prop_action_t track_prop_actions[] = {
 	{ "channel", { "left", "l", "right", "r", "l+r", "both", "stereo", NULL }, 7, track_channel_action },
 	{ "sound", { "<primitive-id>", "sample-from-file", NULL }, 2, track_sound_action },
 	{ "reverse", { "<boolean>", NULL }, 1, track_reverse_action },
@@ -166,5 +166,17 @@ const track_prop_action_t track_prop_actions[] = {
 };
 
 
-const size_t num_track_prop_actions = sizeof(track_prop_actions)/sizeof(track_prop_actions[0]);
+static const size_t num_track_prop_actions = sizeof(track_prop_actions)/sizeof(track_prop_actions[0]);
+
+tpropfunc get_trackprop_action(const char *propname) {
+	for (int i = 0; i < num_track_prop_actions; ++i) {
+		const track_prop_action_t *ta = &track_prop_actions[i];
+		if (strcmp(propname, ta->prop) == 0) {
+			return ta->action;
+		}
+	}
+
+	SGEN_ERROR("unknown track prop %s\n", propname);
+	return NULL;
+}
 

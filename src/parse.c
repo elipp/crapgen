@@ -370,6 +370,11 @@ static int parse_note(const char *notestr, note_t *note, track_ctx_t *ctx) {
 	// assuming the note is already allocated here!
 	//	fprintf(stderr, "Debug: ctx->transpose = %d\n", ctx->transpose);
 
+	if (!note) { 
+		SGEN_ERROR("note passed as argument is NULL!\n");
+		return 0;
+	}
+
 	if (isdigit(notestr[0])) return parse_digit_note(notestr, note, ctx);
 
 	else if (isalpha(notestr[0]))  return parse_musicinput_note(notestr, note, ctx);
@@ -418,27 +423,30 @@ static int get_chord(note_t *note, char** cur_note, char** last_note, track_ctx_
 
 		if ((loc = strchr(cur, '>')) != NULL) {
 			// check if '>' is actually the last character
+			int done = 0;
 			int pos = loc-cur;
-			if (pos != (cur_len - 1)) { 
+			if (pos <= (cur_len - 1)) { 
 				// see if the part after '>' has a valid numeric value in it
 				char *valuestr = substring(loc+1, 0, (cur_len - pos));
-				printf("valuestr: %s\n", valuestr);
 				if (parse_value_string(valuestr, &note->value)) {
-					printf("found chord with value %f\n", note->value);
+					printf("found chord value %f\n", note->value);
 					ctx_update_value(ctx, note->value);
-                                      	chord_end = cur_note;
-					break;
+					done = 1;
 				} else {
 					SGEN_ERROR("syntax error: (chord): unexpected input after \'>\'!\n");
 					return -1; 
 				}
 			}
-			else  {
-//				fprintf(stderr, "debug: found suitable end note: \"%s\"\n", *cur_note);
-				chord_end = cur_note;
-				break;
-
+			else {
+				done = 1;
 			}
+
+			if (done) {
+				chord_end = cur_note;
+				*loc = '\0'; // cut the part after starting from '>', because parse_note will get messed up later on
+				break;
+			}
+
 		} 
 		++cur_note;
 	}
@@ -517,11 +525,11 @@ static int get_chord(note_t *note, char** cur_note, char** last_note, track_ctx_
 	size_t last_len = strlen(*chord_end);
 	char *last = *chord_end;
 
-	if (last[last_len-1] == '>') {
+//	if (last[last_len-1] == '>') {
 		// this is conditional because if we were to have a chord with > CHORD_ELEMENTS_MAX elements, the
 		// chord would get truncated and the last one wouldn't have a '>' in it.
-		last[last_len-1] = '\0'; // remove the terminating '>'. 
-	} 
+//		last[last_len-1] = '\0'; // remove the terminating '>'. 
+//	} 
 
 	if (!parse_note(last, &note->children[j], ctx)) {
 		SGEN_ERROR("parse_note failed! note = \"%s\"\n", last);
@@ -637,6 +645,7 @@ int read_song(expression_t *arg, song_t *s, sgen_ctx_t *c) {
 		char *tname = s->active_track_ids->items[i];
 		for (int j = 0; j < c->num_tracks; ++j) {
 			char *stname = c->tracks[j].name;
+
 			if (strcmp(tname, stname) == 0) {
 				s->tracks[i] = c->tracks[j];
 				match = 1;
@@ -726,7 +735,7 @@ note_t *convert_notestr_wlist_to_notelist(dynamic_wlist_t *notestr_wlist, size_t
 
 	if (err) {
 		free(notes);
-		return NULL;
+		return 0;
 	}
 
 
@@ -778,12 +787,9 @@ int read_track(expression_t *track_expr, track_t *t, sgen_ctx_t *c) {
 
 		printf("track %s: prop \"%s\" = \"%s\"\n", t->name, prop, val);
 
-		for (int i = 0; i < num_track_prop_actions; ++i) {
-			const track_prop_action_t *ta = &track_prop_actions[i];
-			if (strcmp(prop, ta->prop) == 0) {
-				if (!ta->action(val, t, c)) return 0;
-			}
-		}
+		tpropfunc act = get_trackprop_action(prop);
+		if (!act) return 0; 
+		if (!act(val, t, c)) return 0;
 
 //		fprintf(stderr, "debug: &t->envelope = %p, t->envelope.name = \"%s\"\n", &t->envelope, t->envelope.name);
 //		fprintf(stderr, "debug: envelope.parms: %f %f %f %f %f %f %f\n", t->envelope.parms[0], t->envelope.parms[1],  t->envelope.parms[2], t->envelope.parms[3], t->envelope.parms[4], t->envelope.parms[5], t->envelope.parms[6]);

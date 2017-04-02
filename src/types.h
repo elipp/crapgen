@@ -110,7 +110,7 @@ typedef struct track_t {
 
 } track_t;
 
-typedef int (*PFNTRACKPROPACTION)(const char* val, track_t*, struct sgen_ctx_t*);
+typedef int (*tpropfunc)(const char* val, track_t*, struct sgen_ctx_t*);
 
 enum SGEN_FORMATS {
 	S16_FORMAT_LE_MONO = 0,
@@ -165,10 +165,8 @@ typedef struct track_prop_action_t {
 	const char* prop;
 	const char* valid_values[16]; // TODO: this is crap.
 	int num_valid_values;
-	PFNTRACKPROPACTION action;
+	tpropfunc action;
 } track_prop_action_t;
-
-typedef PFNTRACKPROPACTION propfunc_t;
 
 typedef struct sgen_ctx_t {
 	// primitives
