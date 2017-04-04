@@ -4,6 +4,20 @@ static void ctx_update_value(track_ctx_t *ctx, double value) {
 	ctx->value = value;
 }
 
+static void ctx_update_pitch(track_ctx_t *ctx, int p) {
+	printf("updating prevpitch to %d", p);
+	ctx->prev_pitch = p;
+}
+
+static void ctx_update_transp(track_ctx_t *ctx, int t) {
+	printf("updating prevtransp to %d\n", t);
+	ctx->prev_transp_base = t;
+}
+
+#define UPDATE_PITCH(ctx, p)\
+	do{ctx_update_pitch(ctx, p);printf(" at %s:%d (%s)\n", __FILE__, __LINE__, __func__);} while(0) 
+
+
 char* get_primitive_identifier(expression_t *track_expr) {
 	char* index = NULL;
 
@@ -29,12 +43,12 @@ dynamic_wlist_t *get_primitive_args(expression_t *prim_expr) {
 }
 
 
-static int get_pitch(const char *notestr, note_t *note, track_ctx_t *ctx) {
+static int get_pitch(const char *notestr, note_t *note, track_ctx_t *ctx, int transp) {
 	
 	if (!notestr) return 0;
 	if (str_isall(notestr, &isdigit)) { 
 		note->pitch = str_to_int_b10(notestr);
-		ctx->prev_pitch = note->pitch;
+		UPDATE_PITCH(ctx, note->pitch);
 		return 1;
 	}
 
@@ -58,31 +72,31 @@ static int get_pitch(const char *notestr, note_t *note, track_ctx_t *ctx) {
 	switch (n) {
 		case 'c':
 			base = 0;
-			transp_base = 1;
+			transp_base = 0;
 			break;
 		case 'd':
 			base = 2;
-			transp_base = 2;
+			transp_base = 1;
 			break;
 		case 'e':
 			base = 4;
-			transp_base = 3;
+			transp_base = 2;
 			break;
 		case 'f':
 			base = 5;
-			transp_base = 4;
+			transp_base = 3;
 			break;
 		case 'g':
 			base = 7;
-			transp_base = 5;
+			transp_base = 4;
 			break;
 		case 'a':
 			base = 9;
-			transp_base = 6;
+			transp_base = 5;
 			break;
 		case 'b':
 			base = 11;
-			transp_base = 7;
+			transp_base = 6;
 			break;
 		case 'r':
 			note->pitch = 0;
@@ -104,48 +118,84 @@ static int get_pitch(const char *notestr, note_t *note, track_ctx_t *ctx) {
 	}
 
 	else if (strcmp(note_lower + 1, "is") == 0 || strcmp(note_lower + 1, "#") == 0) {
-		if (n == 'b') {
-			rval = 0; // because the modulo of rval can't go over 12 :)
-		}
-		else {
-			rval = base+1;
-		}
+		rval = base+1;
 	}
 	else if (strcmp(note_lower + 1, "es") == 0 || strcmp(note_lower + 1, "b") == 0) {
-		if (n == 'c') {
-			rval = 11;
-		}
-		else {
-			rval = base-1;
-		}
+		rval = base-1;
 	}
 	else rval = base;
 
-
-	int interval = ctx->prev_transp_base - transp_base;
-	int sign = sgn(interval);
-
-	printf("prev_pitch = %d, prev_transp_base = %d, rval = %d, transp_base = %d\ninterval: %d, sign = %d\n", ctx->prev_pitch, ctx->prev_transp_base, rval, transp_base, interval, sign);
-
-	int flip = abs(interval) > 3 ? 1 : 0;
-	sign = flip ? -sign : sign;
-
-	int p = ctx->prev_pitch;
-
 #define MOD(a,b) ((((a)%(b))+(b))%(b)) // this is supposed to work for negative numbers also
+	rval = MOD(rval, 12);
 
-	if (sign < 0) {
-		while (MOD(p,12) != rval) ++p;
-	} else {
-		while (MOD(p,12) != rval) --p;
+#define max(a,b) \
+   ({ __typeof__ (a) _a = (a); \
+       __typeof__ (b) _b = (b); \
+     _a > _b ? _a : _b; })
+
+#define min(a,b) \
+   ({ __typeof__ (a) _a = (a); \
+       __typeof__ (b) _b = (b); \
+     _a < _b ? _a : _b; })
+
+#define CLOSEST_TO(target, a, b)\
+	(abs(a-target) < abs(b-target) ? a : b)
+
+	int upp = ctx->prev_pitch;
+	int downp = ctx->prev_pitch;
+
+	while (MOD(upp, 12) != rval) ++upp;
+	while (MOD(downp, 12) != rval) --downp;
+
+	int upt = ctx->prev_transp_base;
+	int downt = ctx->prev_transp_base;
+
+	while (MOD(upt, 7) != transp_base) ++upt;
+	while (MOD(downt, 7) != transp_base) --downt;
+
+	int newp = 0;
+	int pp = ctx->prev_pitch;
+
+	int newt = 0;
+	int pt = ctx->prev_transp_base;
+
+	int dp;
+
+	int aut = abs(upt-pt);
+	int adt = abs(downt-pt);
+
+	if (aut < adt) { // then we need to go up
+		newt = upt;
+		dp = upp - pp;
+		if (abs(dp) > 8) { // largest interval with single accidentals is 8 semitones (fes->his)
+		       	newp = downp; 
+		}
+		else newp = upp;
+
+	} else if (adt < aut) { // then we go down 
+		newt = downt;
+
+		dp = downp - pp;
+		if (abs(dp) > 8) { 
+			newp = upp; 
+		}
+		else newp = downp;
+	}
+	else {
+		newp = CLOSEST_TO(pp, upp, downp);
+		dp = newp - pp;
+		newt = pt;
 	}
 
-	printf("p = %d\n", p);
+	
+	note->pitch = newp;
+	note->pitch += transp; 
 
-	ctx->prev_transp_base = transp_base;
+	UPDATE_PITCH(ctx, note->pitch);
+	ctx_update_transp(ctx, MOD(newt,7));
 
-	note->pitch = p;
-	// note: the '',, transposition stuff is applied later, so ctx->prev_pitch is also updated later
+	printf("pitch: %s (transp arg: %d), dp = %d\n (pitch: %d -> [%d/%d] -> \033[1m%d\033[0m, transpb: %d -> [%d/%d] -> %d)\n", notestr, transp, dp, pp, upp, downp, newp, pt, upt, downt, newt);
+
 	note->rest = 0;
 
 	return 1;
@@ -333,7 +383,7 @@ static int parse_musicinput_note(const char *notestr, note_t *note, track_ctx_t 
 		// these are string pooled (string_allocator.c), so free() is a no-op
 		valuestr = substring(notestr, j+1, len - j); 
 		if (!parse_value_string(valuestr, &note->value)) return 0;
-		ctx->value = note->value;
+		ctx_update_value(ctx, note->value);
 	}
 
 	basestr = substring(notestr, 0, i);
@@ -348,19 +398,13 @@ static int parse_musicinput_note(const char *notestr, note_t *note, track_ctx_t 
 	}
 
 
-	if (get_pitch(basestr, note, ctx) < 0) {
+	if (get_pitch(basestr, note, ctx, count_transposition(notestr)) < 0) {
 		SGEN_ERROR("parse_note: syntax error: unresolved notename \"%s\"!\n", basestr);
 		return 0;
 	}
 
 
-	int transp = count_transposition(notestr);
-	note->pitch += transp; // the basic pitch has already been assigned in get_pitch
-//	printf("final pitch (after transp): %f\n", note->pitch);
-
-	// TODO: this is crap! should be assigned in get_pitch, but that requires passing either
-	// the value of i, or the whole basestr to the function. 
-	ctx->prev_pitch = note->pitch; 
+	//if (!note->rest) UPDATE_PITCH(ctx, note->pitch);
 
 	return 1;
 }
@@ -404,7 +448,7 @@ static int have_chord(char **cur_note) {
 	return 0;
 }
 
-static int get_chord(note_t *note, char** cur_note, char** last_note, track_ctx_t *ctx) {
+static int get_chord(note_t *note, char** cur_note, char* const* last_note, track_ctx_t *ctx) {
 
 	char **chord_beg = cur_note;
 	char **chord_end = NULL;
@@ -428,7 +472,7 @@ static int get_chord(note_t *note, char** cur_note, char** last_note, track_ctx_
 			// check if '>' is actually the last character
 			int done = 0;
 			int pos = loc-cur;
-			if (pos <= (cur_len - 1)) { 
+			if (pos < (cur_len - 1)) { 
 				// see if the part after '>' has a valid numeric value in it
 				char *valuestr = substring(loc+1, 0, (cur_len - pos));
 				if (!valuestr) { SGEN_ERROR("syntax error: valuestr was NULL!\n"); return -1; }
@@ -493,11 +537,18 @@ static int get_chord(note_t *note, char** cur_note, char** last_note, track_ctx_
 
 	// exclude the beginning '<' from the first notename
 	char *first = *chord_beg + 1;
+
 	if (!parse_note(first, &note->children[0], ctx)) {
 		// cleanup, return error
 		SGEN_ERROR("parse_note failed! note = \"%s\"\n", first);
 		return 0;
 	}
+
+	// store these for later reference
+	int transp_base_first, pitch_first;
+	transp_base_first = ctx->prev_transp_base;
+	pitch_first = note->children[0].pitch;
+
 
 	note_inherit_value_from_parent(note);
 	note_disinherit_all(note); // because individual notes in a chord can't have children
@@ -515,16 +566,15 @@ static int get_chord(note_t *note, char** cur_note, char** last_note, track_ctx_
 	size_t last_len = strlen(*chord_end);
 	char *last = *chord_end;
 
-//	if (last[last_len-1] == '>') {
-		// this is conditional because if we were to have a chord with > CHORD_ELEMENTS_MAX elements, the
-		// chord would get truncated and the last one wouldn't have a '>' in it.
-//		last[last_len-1] = '\0'; // remove the terminating '>'. 
-//	} 
-
 	if (!parse_note(last, &note->children[j], ctx)) {
 		SGEN_ERROR("parse_note failed! note = \"%s\"\n", last);
 		return 0;
 	}
+
+	printf("pitch of chord first: %d, tb : %d\n", pitch_first, transp_base_first);
+
+	ctx_update_transp(ctx, transp_base_first);
+	UPDATE_PITCH(ctx, pitch_first);
 
 	return num_notes;
 
@@ -703,6 +753,7 @@ note_t *convert_notestr_wlist_to_notelist(dynamic_wlist_t *notestr_wlist, size_t
 			int num_notes = get_chord(&notes[n], cur_note, last_note, &ctx);
 			if (num_notes > 0) {
 				cur_note += num_notes - 1;
+				ctx.prev_pitch = notes[n-num_notes-1].pitch; // keep the
 			} else {
 				SGEN_ERROR("get_chord returned %d! cur_note: \"%s\"\n", num_notes, *cur_note);
 				err = 1; break;

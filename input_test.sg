@@ -14,12 +14,16 @@ vibrato vibrato1(0.0002, 50);
 
 track track1(sound=triangle, channel=l+r, loop=true, transpose=24, envelope=envelope2, eqtemp_steps=12) = {
 
-	r3. a3...
+        <f, c' as' bes es>8 r16 r8
+        <g d' bes' c f>8 r8 r8 r16
+        <as bes' c es g>8 r16
+        <as bes' c es g>8 r16
+        <as bes' c es g>8 r16 r8 r16
+
 };
 
 track track2(sound=noise, channel=l+r, loop=true, transpose=20, envelope=envelope3, eqtemp_steps=12) = {
-        r8 r8 r8 c4 r8    
-
+        r8 r8 r8 c4 r8
 };
 
 song song1() { track1, track2 };

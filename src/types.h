@@ -76,6 +76,7 @@ typedef struct note_t {
 	int rest;
 	float value; // relative duration. 1 for whole note, 2 for half note etc. (ex. a4)
 	float duration_s;
+	int length_samples;
 	const vibrato_t *vibrato;
 	const sound_t *sound;
 	const envelope_t *env;
