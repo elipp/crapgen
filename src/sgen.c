@@ -94,7 +94,7 @@ static int sgen_dump(output_t *output) {
 
 }
 
-static size_t note_synthesize_single(note_t *n, float *samples, const size_t num_samples_max, const envelope_t *env, float A) {
+static size_t note_synthesize_single(note_t *n, float *samples, const size_t num_samples_max, float A) {
 
 	float dt = 1.0/44100.0; // TODO: get samplerate from somewhere
 	//float A = n->num_children > 0 ? 1.0 : 1.0;
@@ -106,9 +106,9 @@ static size_t note_synthesize_single(note_t *n, float *samples, const size_t num
 
 	float time = 0;
 	for (long j = 0; j < num_samples_this; ++j) {
-		float ea = envelope_get_amplitude_noprecalculate(j, num_samples_this, env);
+		float ea = envelope_get_amplitude_noprecalculate(j, num_samples_this, n->env);
 		float tv = v ? v->width * sin(v->freq*time) : 0;
-		float CA = env->parms[ENV_AMPLITUDE];
+		float CA = n->env->parms[ENV_AMPLITUDE];
 		samples[j] += CA*A*ea*n->sound->wform(n->freq, time + tv, 0);
 		time += dt;
 	}
@@ -126,12 +126,12 @@ static size_t note_synthesize(note_t *n, float *samples, const size_t num_sample
 		float A = n->num_children > 0 ? (1.0/n->num_children) : 1.0;
 		for (int i = 0; i < n->num_children; ++i) {
 			note_t *child = &n->children[i];
-			size_t num_samples_this = note_synthesize_single(child, samples, num_samples_max, n->env, A);
+			size_t num_samples_this = note_synthesize_single(child, samples, num_samples_max, A);
 			num_samples_longest = num_samples_this > num_samples_longest ? num_samples_this : num_samples_longest;
 		}
 	}
 	else {
-		size_t num_samples_this = note_synthesize_single(n, samples, num_samples_max, n->env, 1.0);
+		size_t num_samples_this = note_synthesize_single(n, samples, num_samples_max, 1.0);
 		num_samples_longest = num_samples_this;
 	}
 

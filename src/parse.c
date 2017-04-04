@@ -194,7 +194,7 @@ static int get_pitch(const char *notestr, note_t *note, track_ctx_t *ctx, int tr
 	UPDATE_PITCH(ctx, note->pitch);
 	ctx_update_transp(ctx, MOD(newt,7));
 
-	printf("pitch: %s (transp arg: %d), dp = %d\n (pitch: %d -> [%d/%d] -> \033[1m%d\033[0m, transpb: %d -> [%d/%d] -> %d)\n", notestr, transp, dp, pp, upp, downp, newp, pt, upt, downt, newt);
+	printf("pitch: %s (transp arg: %d), dp = %d\n (prevpitch: %d -> [%d/%d] -> \033[1m%d\033[0m, transpb: %d -> [%d/%d] -> %d)\n", notestr, transp, dp, pp, upp, downp, newp, pt, upt, downt, newt);
 
 	note->rest = 0;
 
@@ -753,7 +753,6 @@ note_t *convert_notestr_wlist_to_notelist(dynamic_wlist_t *notestr_wlist, size_t
 			int num_notes = get_chord(&notes[n], cur_note, last_note, &ctx);
 			if (num_notes > 0) {
 				cur_note += num_notes - 1;
-				ctx.prev_pitch = notes[n-num_notes-1].pitch; // keep the
 			} else {
 				SGEN_ERROR("get_chord returned %d! cur_note: \"%s\"\n", num_notes, *cur_note);
 				err = 1; break;

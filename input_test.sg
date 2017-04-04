@@ -20,6 +20,55 @@ track track1(sound=triangle, channel=l+r, loop=true, transpose=24, envelope=enve
         <as bes' c es g>8 r16
         <as bes' c es g>8 r16 r8 r16
 
+        <bes as' c es g>8 r16 r8
+        <b b' d g bes>8 r8 r8 r16
+        <c bes' c d f>8 r16
+        <c bes' c d f>8 r16
+        <e, g' c d g>8 r16 r8 r16
+
+        <f c' as' bes es>8 r16 r8
+        <g d' bes' c f>8 r8 r8 r16
+        <a g' b c e g>8 r16
+        <a g' b c e g>8 r16
+        <a g' b c e g>8 r16 r8 r16
+
+        <a g' b c e g>8 r16 r8
+        <d, g' b c e g b>8 r8 r8 r16
+
+        <g a' b d fis>8 r16
+        <g a' b d fis>8 r16
+        <a b' cis e gis>8 r16 r8 r16
+
+        <fis cis' a' b e>8 r16 r8
+        <gis dis' b' cis fis>8 r8 r8 r16
+        <a b' cis e gis>8 r16
+        <a b' cis e gis>8 r16
+        <a b' cis e gis>8 r16 r8 r16
+
+        <b a' cis e gis>8 r16 r8
+        <c c' dis gis b>8 r8 r8 r16
+        <cis b' cis dis fis>8 r16
+        <cis b' cis dis fis>8 r16
+        <eis, gis' cis dis gis>8 r16 r8 r16
+
+        <fis cis' a' b e>8 r16 r8
+        <gis dis' b' cis fis>8 r8 r8 r16
+
+        <bes c' es as>8 r16
+        <bes c' es as>8 r16
+        r10.66666666666
+        <f as' bes es g>8 r16
+        <f as' bes es g>8 r16
+        r10.66666666666
+        <bes as' bes c es>8 r16
+        <bes as' bes c es>8 r16
+
+        r8 r16
+
+        <c bes' c d f>8 r16
+        <c bes' c d f>8 r16
+
+        <e, g' c d g>8 r16 r8 r16
 };
 
 track track2(sound=noise, channel=l+r, loop=true, transpose=20, envelope=envelope3, eqtemp_steps=12) = {
