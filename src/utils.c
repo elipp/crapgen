@@ -138,3 +138,12 @@ void note_disinherit_all(note_t *note) {
 	}
 }
 
+static const float HALF_RAND_MAX = 0.5*(float)RAND_MAX;
+
+float randomfloat01() { return (float)rand()/(float)RAND_MAX; }
+float randomfloatminus1_1() { return (float)rand()/HALF_RAND_MAX - 1.0; }
+
+long random_int_between(long min, long max) {
+	return rand() % max + min;
+}
+

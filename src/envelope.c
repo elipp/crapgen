@@ -4,11 +4,8 @@
 #include <string.h>
 
 #include "types.h"
+#include "utils.h"
 
-static const float HALF_RAND_MAX = 0.5*(float)RAND_MAX;
-
-float randomfloat01() { return (float)rand()/(float)RAND_MAX; }
-float randomfloatminus1_1() { return (float)rand()/HALF_RAND_MAX - 1.0; }
 
 envelope_t *envelope_generate(char* name, float amplitude, float A, float D, float S, float SL, float R, float RL) {
 

@@ -5,7 +5,7 @@ CFLAGS := -c -Wall -g
 INCLUDE := -Isrc
 LIBS := -lm 
 
-SOURCES=$(addprefix $(SRCDIR)/, waveforms.c string_allocator.c string_manip.c actions.c parse.c dynamic_wlist.c envelope.c utils.c track.c timer.c WAV.c)
+SOURCES=$(addprefix $(SRCDIR)/, waveforms.c string_allocator.c string_manip.c actions.c parse.c dynamic_wlist.c envelope.c utils.c track.c sample.c timer.c WAV.c)
 
 OBJECTS=$(patsubst $(SRCDIR)/%.c, $(OBJDIR)/%.o, $(SOURCES))
 

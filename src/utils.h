@@ -33,4 +33,9 @@ void note_inherit_value_from_parent(note_t *note);
 void note_disinherit(note_t *note);
 void note_disinherit_all(note_t *note);
 
+float randomfloat01();
+float randomfloatminus1_1();
+
+long random_int_between(long min, long max);
+
 #endif

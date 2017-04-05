@@ -11,6 +11,7 @@
 #include "waveforms.h"
 #include "types.h"
 #include "envelope.h"
+#include "utils.h"
 
 static const float TWO_PI = (2*M_PI);
 static const float PI_PER_TWO = (M_PI/2);

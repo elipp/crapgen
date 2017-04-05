@@ -4,6 +4,8 @@
 #include "envelope.h"
 #include "utils.h"
 #include "dynamic_wlist.h"
+#include "sample.h"
+#include "string_manip.h"
 
 static int song_action(expression_t *arg, sgen_ctx_t *c) { 
 
@@ -40,7 +42,45 @@ static int track_action(expression_t *arg, sgen_ctx_t *c) {
 }
 
 static int sample_action(expression_t *arg, sgen_ctx_t *c) { 
-	printf("sgen: sample: NYI! :/\n"); 
+
+	if (c->num_samples == 0) { c->samples = malloc(sizeof(sample_t)); }
+	++c->num_samples;
+
+	c->samples = realloc(c->samples, c->num_samples*sizeof(sample_t));
+
+	dynamic_wlist_t *args = get_primitive_args(arg);
+	if (!args) return 0;
+
+	if (args->num_items < 2) {
+		SGEN_WARNING("sample: invalid number of arguments! expected 2 (filename, OPENMODE)\n");
+		return 0;
+	}
+
+	const char *filename = args->items[0];
+	const char *openmodestr = strip(args->items[1]);
+	const char *samplename;
+	if ((samplename = get_primitive_identifier(arg)) == NULL) { return 0; }
+
+	int openmode = SAMPLE_OPENMODE_BINARY;
+
+	if (strcmp(openmodestr, "SAMPLE_OPENMODE_WAV") == 0) {
+		openmode = SAMPLE_OPENMODE_WAV;
+	}
+	else {
+		openmode = SAMPLE_OPENMODE_BINARY;
+	}
+
+	sample_t *sample = sample_file_as_U16_2ch_wav(filename, samplename, openmode);
+
+	if (!sample) { 
+		puts("sample_file_as_U16_2ch_wav returned NULL!\n");
+		return 0;
+       	}
+
+	printf("constructed sample %s from input file %s with openmode %s! (size %ld bytes)\n", samplename, filename, openmodestr, sample->bufsize_bytes); 
+
+	c->samples[c->num_samples - 1] = *sample;
+
 	return 1; 
 }
 

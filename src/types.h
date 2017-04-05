@@ -2,6 +2,7 @@
 #define TYPES_H
 
 #include <stdlib.h>
+#include <stdint.h>
 
 struct sgen_ctx_t;
 
@@ -161,6 +162,13 @@ typedef struct song_t {
 	int num_envelopes;
 } song_t;
 
+typedef struct sample_t {
+	uint16_t *buffer;
+	long bufsize_bytes;
+	long bufsize_samples;
+	const char *sample_name;
+} sample_t;
+
 
 typedef struct track_prop_action_t {
 	const char* prop;
@@ -187,6 +195,9 @@ typedef struct sgen_ctx_t {
 	song_t *songs;
 	int num_songs;
 
+	sample_t *samples;
+	int num_samples;
+
 } sgen_ctx_t;
 
 typedef int (*keywordfunc)(expression_t*, sgen_ctx_t*);
@@ -195,5 +206,6 @@ typedef struct {
 	const char* keyword; 
 	keywordfunc action; 
 } keyword_action_pair_t; 
+
 
 #endif

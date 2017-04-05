@@ -19,6 +19,7 @@
 #include "actions.h"
 #include "parse.h"
 
+static sgen_ctx_t context;
 
 static void dump_note_t(note_t *n) {
 	fprintf(stderr, "note: num_children = %d\n", n->num_children);
@@ -63,6 +64,18 @@ int construct_sgen_ctx(input_t *input, sgen_ctx_t *c) {
 
 }
 
+short *convert_float_buffer_to_S16(const float* buffer, long num_samples) {
+
+	short *out_buffer = malloc(num_samples * sizeof(short));
+
+	for (long i = 0; i < num_samples; ++i) {
+		out_buffer[i] = (short)(0.5*SHORT_MAX*(buffer[i]));
+	}
+
+	return out_buffer;
+
+}
+
 static int sgen_dump(output_t *output) {
 
 	static const char *outfname = "output_test.wav";
@@ -70,14 +83,9 @@ static int sgen_dump(output_t *output) {
 	sgen_float32_buffer_t b = output->float32_buffer;	// short
 
 	long total_num_samples = output->channels*b.num_samples_per_channel;
+	short *out_buffer = convert_float_buffer_to_S16(b.buffer, total_num_samples);
 
 	size_t outbuf_size = total_num_samples*sizeof(short);
-	short *out_buffer = malloc(outbuf_size);
-
-	for (long i = 0; i < total_num_samples; ++i) {
-		out_buffer[i] = (short)(0.5*SHORT_MAX*(b.buffer[i]));
-	}
-
 	printf("sgen: dumping buffer of %ld samples to file %s.\n", b.num_samples_per_channel, outfname);
 
 	WAV_hdr_t wav_header = generate_WAV_header(output);
@@ -293,16 +301,13 @@ int main(int argc, char* argv[]) {
 	sgen_timer_t t = timer_construct();
 	timer_begin(&t);
 
-	sgen_ctx_t c;
-	memset(&c, 0x0, sizeof(c));
-
-	c.duration_s = 10;
+	context.duration_s = 10;
 
 	char *time = timer_report(&t);
-	if (!construct_sgen_ctx(&input, &c)) return 1;
+	if (!construct_sgen_ctx(&input, &context)) return 1;
 
-	for (int i = 0; i < c.num_songs; ++i) {
-		song_synthesize(&o, &c.songs[i]);
+	for (int i = 0; i < context.num_songs; ++i) {
+		song_synthesize(&o, &context.songs[i]);
 		sgen_dump(&o);
 	}
 

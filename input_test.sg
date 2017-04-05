@@ -1,7 +1,7 @@
 tempo 160;
 duration 30;
 
-//sample sample1("sound.wav");
+sample sample1(sound.wav, SAMPLE_OPENMODE_WAV);
 //sound sound1(sound=sample1);
 
 // envelope args: Amplitude [0,1], Attack, Decay, Sustain, Sustain Level [0,1], Release, Legato (relative length. RL of 1 means duration as written)
