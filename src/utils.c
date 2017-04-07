@@ -147,3 +147,27 @@ long random_int_between(long min, long max) {
 	return rand() % max + min;
 }
 
+short *convert_ftos16(const float* buffer, long num_samples) {
+
+	short *out_buffer = malloc(num_samples * sizeof(short));
+
+	for (long i = 0; i < num_samples; ++i) {
+		out_buffer[i] = (short)(0.5*SHORT_MAX*(buffer[i]));
+	}
+
+	return out_buffer;
+
+}
+
+float *convert_s16tof(const short *buffer, long num_samples) {
+	
+	float *out_buffer = malloc(num_samples * sizeof(float));
+
+	for (long i = 0; i < num_samples; ++i) {
+		out_buffer[i] = ((float)buffer[i]/(float)SHORT_MAX);
+//		printf("%f\n", out_buffer[i]);
+	}
+
+	return out_buffer;
+}
+

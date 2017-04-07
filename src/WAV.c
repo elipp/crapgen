@@ -7,7 +7,6 @@
 #include "WAV.h"
 #include "utils.h"
 
-const short SHORT_MAX = 0x7FFF;
 
 static inline int eswap_s32(int n) {
 	return ((n>>24)&0x000000FF) |

@@ -18,6 +18,7 @@
 #include "timer.h"
 #include "actions.h"
 #include "parse.h"
+#include "sample.h"
 
 static sgen_ctx_t context;
 
@@ -64,17 +65,6 @@ int construct_sgen_ctx(input_t *input, sgen_ctx_t *c) {
 
 }
 
-short *convert_float_buffer_to_S16(const float* buffer, long num_samples) {
-
-	short *out_buffer = malloc(num_samples * sizeof(short));
-
-	for (long i = 0; i < num_samples; ++i) {
-		out_buffer[i] = (short)(0.5*SHORT_MAX*(buffer[i]));
-	}
-
-	return out_buffer;
-
-}
 
 static int sgen_dump(output_t *output) {
 
@@ -83,7 +73,7 @@ static int sgen_dump(output_t *output) {
 	sgen_float32_buffer_t b = output->float32_buffer;	// short
 
 	long total_num_samples = output->channels*b.num_samples_per_channel;
-	short *out_buffer = convert_float_buffer_to_S16(b.buffer, total_num_samples);
+	short *out_buffer = convert_ftos16(b.buffer, total_num_samples);
 
 	size_t outbuf_size = total_num_samples*sizeof(short);
 	printf("sgen: dumping buffer of %ld samples to file %s.\n", b.num_samples_per_channel, outfname);
@@ -113,13 +103,22 @@ static size_t note_synthesize_single(note_t *n, float *samples, const size_t num
 	const vibrato_t *v = n->vibrato;
 
 	float time = 0;
+	float *smpl = sample_get_random_waveform_freq(&context.samples[0], n->freq);
+	long period = 44100.0/n->freq;
+
 	for (long j = 0; j < num_samples_this; ++j) {
 		float ea = envelope_get_amplitude_noprecalculate(j, num_samples_this, n->env);
 		float tv = v ? v->width * sin(v->freq*time) : 0;
 		float CA = n->env->parms[ENV_AMPLITUDE];
-		samples[j] += CA*A*ea*n->sound->wform(n->freq, time + tv, 0);
+//		float w = n->sound->wform(n->freq, time + tv, 0);
+		float w = smpl[j % period];
+//		printf("j: %d, %.3f\n", j, w);
+
+		samples[j] += CA*A*ea*w;
 		time += dt;
 	}
+
+	free(smpl);
 
 	return num_samples_this;
 
@@ -311,6 +310,18 @@ int main(int argc, char* argv[]) {
 		sgen_dump(&o);
 	}
 
+//	float freq = 110;
+//	float *demof = sample_get_random_waveform_freq(&context.samples[0], freq*4);
+//	long num_samples = 44100/freq;
+//	short *demos = convert_ftos16(demof, num_samples);
+//
+//	FILE *d = fopen("pensselnxd.raw", "wb");
+//	for (int i = 0; i < 1000; ++i) {
+//		fwrite(demos+2*i, num_samples, sizeof(short), d);
+//	}
+//
+//	fclose(d);
+	
 	printf("sgen: took %s.\n", timer_report(&t));
 	free(time);
 

@@ -2,7 +2,6 @@
 #define TYPES_H
 
 #include <stdlib.h>
-#include <stdint.h>
 
 struct sgen_ctx_t;
 
@@ -163,7 +162,7 @@ typedef struct song_t {
 } song_t;
 
 typedef struct sample_t {
-	uint16_t *buffer;
+	float *buffer;
 	long bufsize_bytes;
 	long bufsize_samples;
 	const char *sample_name;

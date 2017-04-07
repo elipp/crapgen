@@ -75,4 +75,8 @@ track track2(sound=noise, channel=l+r, loop=true, transpose=20, envelope=envelop
         r8 r8 r8 c4 r8
 };
 
+track test(sound=triangle, channel=l+r, loop=true, transpose=20, envelope=envelope2, eqtemp_steps=12) = {
+	<c e g c>0.7
+};
+
 song song1() { track1, track2 };

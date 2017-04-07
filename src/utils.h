@@ -4,7 +4,15 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <execinfo.h>
+#include <math.h>
 #include "types.h"
+
+#define SHORT_MAX (0x7FFF)
+
+#define MAX(a,b) \
+   ({ __typeof__ (a) _a = (a); \
+       __typeof__ (b) _b = (b); \
+     _a > _b ? _a : _b; })
 
 #define SGEN_ERROR(fmt, ...) do {\
 	fprintf(stderr, "sgen: %s (@%s:%d) error: " fmt, __func__, __FILE__,  __LINE__, ## __VA_ARGS__);\
@@ -37,5 +45,8 @@ float randomfloat01();
 float randomfloatminus1_1();
 
 long random_int_between(long min, long max);
+
+short *convert_ftos16(const float* buffer, long num_samples);
+float *convert_s16tof(const short *buffer, long num_samples);
 
 #endif
