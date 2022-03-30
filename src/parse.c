@@ -644,6 +644,7 @@ int file_get_active_expressions(const char* filename, input_t *input) {
 	dynamic_wlist_t *exprs_wlist = tokenize_wr_delim(relevant, ";");
 
 	expression_t *exprs = malloc(exprs_wlist->num_items*sizeof(expression_t));
+	input->num_active_exprs = exprs_wlist->num_items;
 	for (int i = 0; i < exprs_wlist->num_items; ++i) {
 		exprs[i].statement = exprs_wlist->items[i];
 		exprs[i].wlist = tokenize_wr_delim(exprs[i].statement, " \t");
@@ -651,7 +652,6 @@ int file_get_active_expressions(const char* filename, input_t *input) {
 
 	wlist_destroy(exprs_wlist);
 	input->exprs = exprs;
-	input->num_active_exprs = exprs_wlist->num_items;
 
 
 	// didn't even know this existed in the c stdlib

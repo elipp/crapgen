@@ -1,7 +1,7 @@
 SRCDIR := src
 OBJDIR := objs
 CC := gcc 
-CFLAGS := -c -Wall -g 
+CFLAGS := -Wall -g
 INCLUDE := -Isrc
 LIBS := -lm 
 
@@ -13,10 +13,10 @@ all: sgen
 
 $(OBJDIR)/%.o : $(SRCDIR)/%.c
 	@mkdir -p $(@D)
-	$(CC) $(CFLAGS) $< -o $@
+	$(CC) -c $(CFLAGS) $< -o $@
 
 sgen: $(OBJECTS) $(SRCDIR)/sgen.c $(SRCDIR)/waveforms.c
-	$(CC) $(SRCDIR)/sgen.c $(INCLUDE) $(OBJECTS) -o sgen $(LIBS)
+	$(CC) $(CFLAGS) $(SRCDIR)/sgen.c $(INCLUDE) $(OBJECTS) -o sgen $(LIBS)
 
 
 clean:
